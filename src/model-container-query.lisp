@@ -13,21 +13,21 @@ DB-side triggers based on each active query instance.
   ((dao-class :reader dao-class-of :initarg :dao-class
               :type symbol
               :initform (error ":DAO-CLASS needed."))
-   
+
    (query :accessor query-of
           :type string)
-   
+
    #| TODO:
    Implementing this really boils down to creating a custom DSL that's compiled
    to one SQL query and one 'application query'. Think about sorting, order .. etc.
    (app-query :accessor app-query-of :initarg :app-query
               :initform nil)
    |#
-   
+
    (dependencies :accessor dependencies-of
                  :type list
                  :initform nil))
-  
+
   (:metaclass mvc-stm-class)
   (:documentation "
 Container model representing a SQL query, or its results, vs. a DB backend."))
@@ -46,10 +46,10 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
 
 
 (defmethod refresh ((model query) &optional operation)
-  (merge-into model
-              (let ((dao-class (dao-class-of model)))
-                (loop :for id :in (with-db-connection (query (query-of model) :column))
-                   :collect (get-db-object id dao-class)))))
+  (transform-into model
+                  (let ((dao-class (dao-class-of model)))
+                    (loop :for id :in (with-db-connection (query (query-of model) :column))
+                       :collect (get-db-object id dao-class)))))
 
 
 (defmethod (setf query-of) :after (query (model query))
@@ -72,7 +72,7 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
                                     'container-remove ;; SQL DELETE.
                                     'save)            ;; SQL UPDATE.
                                 (refresh model operation))
-                           
+
                                (t
                                 (error "Don't know how to handle ~A in context of ~A."
                                        operation model))))))))
