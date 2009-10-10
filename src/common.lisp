@@ -1,14 +1,14 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(in-package #:sw-db)
+(in-package sw-db)
+(in-readtable sw-db)
 
 
 (defparameter *database-connection-info*
-  (list "temp"
-        "temp"
-        "temp"
-        "localhost"
-        :pooled-p t))
+  '("temp" "temp" "temp" "localhost"
+    :pooled-p t)
+  "SW-DB> (describe 'connect)
+   Lambda-list: (DATABASE USER PASSWORD HOST &KEY (PORT 5432) POOLED-P (USE-SSL *DEFAULT-USE-SSL*))")
 
 
 (defmacro with-db-connection (&body body)
@@ -38,39 +38,40 @@ fast (hash-table) retrieval later."
         (when found-p
           (return-from get-db-object (values dao :from-cache)))))
     (if-let (dao (with-db-connection (get-dao type id)))
-            (progn
-              (when cache-p
-                (cache-object dao))
-              (values dao :from-db))
-            (values nil nil))))
+      (progn
+        (when cache-p
+          (cache-object dao))
+        (values dao :from-db))
+      (values nil nil))))
 
 
 (defun put-db-object (dao &key (cache-p t))
-  "Returns :UPDATE or :INSERT based on what was done (SQL-wize).
-If an insert was done (:INSERT was returned), the ID slot of DAO will be bound
-after this call.
-If CACHE-P is T (default) the object will be placed in a Lisp-side cache for
-fast (hash-table) retrieval via GET-DB-OBJECT later."
-  (with-lock-held ((lock-of (class-of dao)))
-    (prog1
-        (if (exists-in-db-p dao)
-            (prog1 :update
-              (with-db-connection (update-dao dao)))
-            (prog1 :insert
-              (with-db-connection (save-dao dao))))
-      (when cache-p
-        (cache-object dao)))))
+  ;; Touch the entire object (STM). TODO: Get rid of this.
+  (dolist (slot-name (postmodern::dao-column-fields (class-of dao)))
+    (when (slot-boundp dao slot-name)
+      (slot-value dao slot-name)))
+  (sw-stm:when-commit ()
+    (with-lock-held ((lock-of (class-of dao)))
+      (prog1
+          (if (exists-in-db-p dao)
+              (prog1 :update
+                (with-db-connection (update-dao dao)))
+              (prog1 :insert
+                (with-db-connection (save-dao dao))))
+        (when cache-p
+          (cache-object dao))))))
 
-  
+
 (defun remove-db-object (dao)
-  (with-lock-held ((lock-of (class-of dao)))
-    (with-db-connection
-      (dolist (dao (mklst dao))
-        (delete-dao dao)))
-    ;; TODO: I'm not sure doing this explicitly is such a good idea because it might still be
-    ;; interesting to get hold of an object based on only knowing its ID; even though it is deleted
-    ;; it might still have hard links (GC) multiple places in the code.
-    #|(uncache-object dao)|#))
+  (sw-stm:when-commit ()
+    (with-lock-held ((lock-of (class-of dao)))
+      (with-db-connection
+        (dolist (dao (mklst dao))
+          (delete-dao dao)))
+      ;; TODO: I'm not sure doing this explicitly is such a good idea because it might still be
+      ;; interesting to get hold of an object based on only knowing its ID; even though it is deleted
+      ;; it might still have hard links (GC) multiple places in the code.
+      #|(uncache-object dao)|#)))
 
 
 (defun dao-table-info (dao-class)
@@ -87,4 +88,3 @@ table currently representing DAO-CLASS."
                                        (:select 'oid :from 'pg_class :where (:= 'relname table-name)))
                                    (:> 'attnum 0)))
              :alists))))
-

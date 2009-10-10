@@ -1,7 +1,8 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(defpackage #:sw-db
+(defpackage sw-db
   (:use #:cl
+        #:named-readtables
         #:closer-mop
         #:sw-mvc
         #:postmodern
@@ -17,10 +18,12 @@
                           #:once-only)
 
   (:shadowing-import-from #:sw-mvc
+                          #:insert
+                          #:exchange
                           #:remove)
 
   (:shadow #:container)
-  
+
 
   (:export
    #:*database-connection-info*
@@ -35,5 +38,3 @@
 
 
 (in-package #:sw-db)
-
-  

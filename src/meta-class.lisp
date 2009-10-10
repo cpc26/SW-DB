@@ -1,20 +1,20 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(in-package #:sw-db)
+(in-package sw-db)
+(in-readtable sw-db)
 
 
-(defclass db-class (dao-class)
+
+(defclass db-class (mvc-class dao-class) #|(dao-class mvc-class)|#
   ((container :reader container-of
-              :type container)))
+              :type container))
+
+  (:documentation "Metaclass combining the characteristics of MVC-CLASS (SW-MVC) and
+DAO-CLASS (Postmodern)."))
 
 
-
-(defclass mvc-stm-db-class (mvc-stm-class db-class)
-  ()
-
-  (:documentation "
-Combines the characteristics of the MVC-CLASS, STM-CLASS and DB-CLASS
-metaclasses."))
+(defmethod validate-superclass ((class db-class) (superclass dao-class))
+  t)
 
 
 (defmethod initialize-instance :after ((class db-class) &key)
@@ -26,72 +26,24 @@ metaclasses."))
   (container-of (find-class class)))
 
 
-(defmethod validate-superclass ((class db-class) (superclass dao-class))
-  t)
+#|(defclass direct-db-slotd (postmodern::direct-column-slot)
+  ())|#
 
 
-(defmethod finalize-inheritance :after ((class db-class))
-  (let ((db-column-slots (dao-table-info class))
-        (lisp-column-slots
-         (loop :for column-slot :in (postmodern::dao-column-slots class)
-            :collect (let ((col-info nil))
-                       (push (cons :name (postmodern::slot-sql-name column-slot))
-                             col-info)
-                       (multiple-value-bind (type can-be-null-p)
-                           (s-sql::dissect-type (postmodern::column-type column-slot))
-                         (push (cons :type (s-sql:sql-type-name type))
-                               col-info)
-                         (push (cons :can-be-null-p can-be-null-p)
-                               col-info))
-                       (when (slot-boundp column-slot 'postmodern::col-default)
-                         (push (cons :default (postmodern::column-default column-slot))
-                               col-info))
-                       col-info))))
-
-    ;; TODO: Rename of slot/column?
-    (let ((new-columns nil)
-          (removed-columns nil))
-      ;; Find new slots/columns.
-      (dolist (lisp-column-slot lisp-column-slots)
-        (let ((column-name (cdr (assoc :name lisp-column-slot))))
-          (unless (find column-name db-column-slots
-                        :key (lambda (elt) (cdr (assoc :name elt)))
-                        :test #'string=)
-            (push lisp-column-slot new-columns)
-            ;;(format t "slot ~A about to be added to db~%" column-name)
-            )))
-
-      ;; Find removed slots/columns.
-      (dolist (db-column-slot db-column-slots)
-        (let ((column-name (cdr (assoc :name db-column-slot))))
-          ;;(dbg-princ column-name)
-          ;;(dbg-princ lisp-column-slots)
-          (unless (find column-name lisp-column-slots
-                        :key (lambda (elt) (cdr (assoc :name elt)))
-                        :test #'string=)
-            (push db-column-slot removed-columns)
-            ;;(format t "slot ~A about to be removed from db~%" column-name)
-            ))))
-
-
-    ;; Set type.
-
-    ;; Find slots/columns whose type has changed.
-    
-    ;; Find slots/columns whos `ATTNOTNULL' state has changed.
-
-    ;; Find slots/colums whos `ATTHASDEF' state has changed.
-    
-    ;(warn "TODO: finish finalize-inheritance db-class (sw-db/src/class.lisp)")
-    ;(dbg-princ db-column-slots)
-    ;(dbg-princ lisp-column-slots)
-    ;(dbg-princ (find :attname (first db-column-slots)
-    ;                 :key #'car))
-    ))
+#|(defmethod closer-mop:direct-slot-definition-class ((class db-class) &rest args &key column col-type (cellp t)
+                                                    &allow-other-keys)
+  #|(dbg-prin1 args)|#
+  (if (or column col-type)
+      (if cellp
+          (find-class 'direct-db-slotd)
+          (find-class 'postmodern::direct-column-slot))
+      (if cellp
+          (find-class 'sw-mvc::direct-cell-slotd)
+          (call-next-method))))|#
 
 
 
-(defclass db-object (model-base)
+(defclass db-object (model)
   ((id :col-type serial
        :reader id-of
        :documentation "
@@ -160,31 +112,38 @@ which holds instances of DB-OBJECT (representations of DB rows)."
 
 
 
-(defclass db-object-direct-column-slot (postmodern::direct-column-slot)
-  ((dao-class :initarg :dao-class :reader dao-class-of)))
+#|(defclass direct-db-object-slotd (sw-mvc::direct-cell-slotd postmodern::direct-column-slot)
+;;(defclass direct-db-object-slotd (postmodern::direct-column-slot)
+  ((dao-class :initarg :dao-class :reader dao-class-of)))|#
 
 
-(defmethod initialize-instance :after ((slot-def db-object-direct-column-slot) &key dao-class)
+#|(defmethod initialize-instance :after ((slotd direct-db-object-slotd) &key dao-class)
   (when dao-class
-    (setf (slot-value slot-def 'dao-class)
-          (find-class dao-class))))
+    (setf (slot-value slotd 'dao-class)
+          (find-class dao-class))))|#
 
 
-(defmethod closer-mop:direct-slot-definition-class :around ((class db-class) &key dao-class &allow-other-keys)
+#|(defmethod closer-mop:direct-slot-definition-class :around ((class db-class) &key dao-class &allow-other-keys)
+  (dbg-prin1 class "db-class")
+  (dbg-prin1 dao-class)
   (if dao-class
-      (find-class 'db-object-direct-column-slot)
-      (call-next-method)))
+      (find-class 'db-object-direct-column-slotd)
+      (call-next-method)))|#
 
 
-(defmethod dao-slot-class-of ((object db-object) slot)
+#|(defmethod dao-slot-class-of ((object db-object) slot)
+  "Does SLOT refer to another DB-OBJECT instance? Returns two values:
+
+  * referred-dao-class
+  * referring-to-other-dao-class-p"
   (let ((direct-slot (postmodern::slot-column slot)))
-    (if (typep direct-slot 'db-object-direct-column-slot)
+    (if nil #|(typep direct-slot 'direct-db-object-slotd)|#
         (values (dao-class-of direct-slot) t)
-        (values nil nil))))      
+        (values nil nil))))|#
 
 
-;; This handles composition of DB-CLASSes by adding a :DAO-CLASS slot-option.
-(defmethod slot-value-using-class :around ((class db-class)
+;; This handles composition of DB-CLASSes via the :DAO-CLASS slot-option.
+#|(defmethod slot-value-using-class :around ((class db-class)
                                            object
                                            (slotd postmodern::effective-column-slot))
   (let ((value (call-next-method)))
@@ -199,15 +158,85 @@ which holds instances of DB-OBJECT (representations of DB rows)."
                       (get-db-object value (class-name referred-dao-class))
                     (if found-p
                         (prog1 dao-object
-                          ;;(setf (slot-value-using-class class object slotd) dao-object)
-                          )
-                        (error "Slot ~A in ~A refers to an object of class ~A with ID ~A that does not exist in the DB."
-                               slotd object referred-dao-class value))))
-              value)))))
+                          #|(setf (slot-value-using-class class object slotd) dao-object)|#)
+                        (error
+                         "Slot ~A in ~A refers to an object of class ~A with ID ~A that does not exist in the DB."
+                         slotd object referred-dao-class value))))
+              value)))))|#
+
+
+
+
+
+#|(defmethod finalize-inheritance :after ((class db-class))
+  (let ((db-column-slots (dao-table-info class))
+        (lisp-column-slots
+         (loop :for column-slot :in (postmodern::dao-column-slots class)
+            :collect (let ((col-info nil))
+                       (push (cons :name (postmodern::slot-sql-name column-slot))
+                             col-info)
+                       (multiple-value-bind (type can-be-null-p)
+                           (s-sql::dissect-type (postmodern::column-type column-slot))
+                         (push (cons :type (s-sql:sql-type-name type))
+                               col-info)
+                         (push (cons :can-be-null-p can-be-null-p)
+                               col-info))
+                       (when (slot-boundp column-slot 'postmodern::col-default)
+                         (push (cons :default (postmodern::column-default column-slot))
+                               col-info))
+                       col-info))))
+
+    ;; TODO: Rename of slot/column?
+    (let ((new-columns nil)
+          (removed-columns nil))
+      ;; Find new slots/columns.
+      (dolist (lisp-column-slot lisp-column-slots)
+        (let ((column-name (cdr (assoc :name lisp-column-slot))))
+          (unless (find column-name db-column-slots
+                        :key (lambda (elt) (cdr (assoc :name elt)))
+                        :test #'string=)
+            (push lisp-column-slot new-columns)
+            ;;(format t "slot ~A about to be added to db~%" column-name)
+            )))
+
+      ;; Find removed slots/columns.
+      (dolist (db-column-slot db-column-slots)
+        (let ((column-name (cdr (assoc :name db-column-slot))))
+          ;;(dbg-princ column-name)
+          ;;(dbg-princ lisp-column-slots)
+          (unless (find column-name lisp-column-slots
+                        :key (lambda (elt) (cdr (assoc :name elt)))
+                        :test #'string=)
+            (push db-column-slot removed-columns)
+            ;;(format t "slot ~A about to be removed from db~%" column-name)
+            ))))
+
+
+    ;; Set type.
+
+    ;; Find slots/columns whose type has changed.
+
+    ;; Find slots/columns whos `ATTNOTNULL' state has changed.
+
+    ;; Find slots/colums whos `ATTHASDEF' state has changed.
+
+    ;(warn "TODO: finish finalize-inheritance db-class (sw-db/src/class.lisp)")
+    ;(dbg-princ db-column-slots)
+    ;(dbg-princ lisp-column-slots)
+    ;(dbg-princ (find :attname (first db-column-slots)
+    ;                 :key #'car))
+    ))|#
+
+
+
+
+
+
+
 
 
 #|
-(defmethod (setf slot-value-using-class) :around (new-value (class db-class) instance
+ (defmethod (setf slot-value-using-class) :around (new-value (class db-class) instance
                                                             (slot-definition postmodern::effective-column-slot))
   #|
   (when (in-transaction-p)
@@ -219,7 +248,7 @@ which holds instances of DB-OBJECT (representations of DB rows)."
   (call-next-method))
 
 
-(defmethod slot-value-using-class :around ((class db-class) instance
+ (defmethod slot-value-using-class :around ((class db-class) instance
                                            (slot-definition postmodern::effective-column-slot))
   #|
   (when (in-transaction-p)
@@ -230,14 +259,8 @@ which holds instances of DB-OBJECT (representations of DB rows)."
   |#
   (call-next-method))
 |#
-  
 
 
-
-
-
-
-  
 #|
 (defclass double-linked-mixin ()
   ((left :col-type (or integer db-null) :dao-class double-linked-mixin

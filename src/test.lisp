@@ -1,16 +1,20 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(in-package #:sw-db)
+(in-package sw-db)
+(in-readtable sw-db)
 
-(define-global -generate-repl-output-p- nil)
+
+(define-variable -generate-repl-output-p-
+    :value nil)
+
 
 
 (defclass location ()
   ((name :col-type string
          :accessor name-of :initarg :name
          :initform ""))
-  
-  (:metaclass mvc-stm-db-class)
+
+  (:metaclass db-class) ;;mvc-stm-db-class)
   (:table-name locations))
 
 
@@ -20,7 +24,7 @@
                :accessor first-name-of :initarg :first-name
                :initform "")
 
-   (last-name :col-type string 
+   (last-name :col-type string
               :accessor last-name-of :initarg :last-name
               :initform "")
 
@@ -31,7 +35,7 @@
    (location-id :col-type (or db-null integer) :dao-class location
                 :accessor location-of :initarg :location))
 
-  (:metaclass mvc-stm-db-class)
+  (:metaclass db-class)
   (:table-name people))
 
 
@@ -41,7 +45,7 @@
 
 
 (defmethod handle-model-slot-set-event ((view person-view) model event slot-name)
-  (when -generate-repl-output-p- 
+  (when -generate-repl-output-p-
     (format t "PERSON-VIEW: Update View of ~A based on ~A ~A~%"
             model event slot-name)))
 
@@ -76,7 +80,7 @@
     (declare (dynamic-extent result-view person-view)
              (ignorable result-view lnostdal person-view))
 
-    (when -generate-repl-output-p- 
+    (when -generate-repl-output-p-
       (write-line  "## SQL UPDATE ##")
       (format t "before: ~A~%" (length ~query-model)))
     (setf (age-of lnostdal) 17)
@@ -85,19 +89,19 @@
       (format t "after: ~A~%" (length ~query-model)))
     (setf (age-of lnostdal) 28)
     (save lnostdal)
-    (when -generate-repl-output-p- 
+    (when -generate-repl-output-p-
       (format t "back to start: ~A~%" (length ~query-model))
       (terpri))
 
-    (when -generate-repl-output-p- 
+    (when -generate-repl-output-p-
       (write-line "## SQL INSERT and DELETE ##")
       (format t "before: ~A~%" (length ~query-model)))
     (let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
       (add person (container-of person))
-      (when -generate-repl-output-p- 
+      (when -generate-repl-output-p-
         (format t "after: ~A~%" (length ~query-model)))
       (remove person (container-of person)))
-    (when -generate-repl-output-p- 
+    (when -generate-repl-output-p-
       (format t "back to start: ~A~%" (length ~query-model)))))
 
 
@@ -111,7 +115,7 @@
     (ignore-errors (execute (:drop-table 'locations)))
     (execute (dao-table-definition 'person))
     (execute (dao-table-definition 'location)))
-  
+
   (put-db-object (make-instance 'location :name "Skien")
                  :cache-p nil)
 
@@ -185,7 +189,7 @@
 
 (defun test-db-container-2 ()
          ;; Model.
-  (let* ((query-model (make-instance 'query       
+  (let* ((query-model (make-instance 'query
                                      :dao-class 'person
                                      :query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18)))))
          ;; View.
@@ -194,7 +198,7 @@
     (format t "initial amount of people above 18: ~A~%"
             (length (content-of query-model)))
     (terpri)
-    
+
     (let ((koala (make-instance 'person :first-name "koala_man" :age 25)))
       (add koala (container-of 'person))
       (format t "after adding one more: ~A~%"
@@ -240,4 +244,3 @@
           "some new last name")))
 
 |#
-

@@ -1,6 +1,7 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(in-package #:sw-db)
+(in-package sw-db)
+(in-readtable sw-db)
 
 
 #| TODO:
