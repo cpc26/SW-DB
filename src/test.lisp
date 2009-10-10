@@ -68,7 +68,7 @@
 
 
 
-(defun test-db-update ()
+#|(defun test-db-update ()
   (let* ((query-model
           (make-instance 'query
                          :dependencies '(person)
@@ -102,7 +102,7 @@
         (format t "after: ~A~%" (length ~query-model)))
       (remove person (container-of person)))
     (when -generate-repl-output-p-
-      (format t "back to start: ~A~%" (length ~query-model)))))
+      (format t "back to start: ~A~%" (length ~query-model)))))|#
 
 
 

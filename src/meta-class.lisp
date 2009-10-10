@@ -25,22 +25,6 @@ DAO-CLASS (Postmodern)."))
   (container-of (find-class class)))
 
 
-#|(defclass direct-db-slotd (postmodern::direct-column-slot)
-  ())|#
-
-
-#|(defmethod closer-mop:direct-slot-definition-class ((class db-class) &rest args &key column col-type (cellp t)
-                                                    &allow-other-keys)
-  #|(dbg-prin1 args)|#
-  (if (or column col-type)
-      (if cellp
-          (find-class 'direct-db-slotd)
-          (find-class 'postmodern::direct-column-slot))
-      (if cellp
-          (find-class 'sw-mvc::direct-cell-slotd)
-          (call-next-method))))|#
-
-
 
 (defclass db-object (model)
   ((id :col-type serial
@@ -69,7 +53,7 @@ anything on (or before) GC of an object.
 
 
 (defmethod cl-postgres:to-sql-string ((db-object db-object))
-  ;; The Postmodern refers to and "sees" all DB-OBJECT instances by their ID (slot).
+  ;; Postmodern refers to and "sees" all DB-OBJECT instances by their ID (slot).
   (cl-postgres:to-sql-string (id-of db-object)))
 
 
@@ -111,40 +95,37 @@ which holds instances of DB-OBJECT (representations of DB rows)."
 
 
 
-#|(defclass direct-db-object-slotd (sw-mvc::direct-cell-slotd postmodern::direct-column-slot)
-;;(defclass direct-db-object-slotd (postmodern::direct-column-slot)
-  ((dao-class :initarg :dao-class :reader dao-class-of)))|#
+(defclass direct-db-object-slotd (postmodern::direct-column-slot)
+  ((dao-class :initarg :dao-class :reader dao-class-of))
+
+  (:documentation "
+This handles composition of DB-CLASSes via the :DAO-CLASS slot-option."))
 
 
-#|(defmethod initialize-instance :after ((slotd direct-db-object-slotd) &key dao-class)
+(defmethod initialize-instance :after ((slotd direct-db-object-slotd) &key dao-class)
   (when dao-class
     (setf (slot-value slotd 'dao-class)
-          (find-class dao-class))))|#
+          (find-class dao-class))))
 
 
-#|(defmethod closer-mop:direct-slot-definition-class :around ((class db-class) &key dao-class &allow-other-keys)
-  (dbg-prin1 class "db-class")
-  (dbg-prin1 dao-class)
+(defmethod closer-mop:direct-slot-definition-class :around ((class db-class) &key dao-class &allow-other-keys)
   (if dao-class
-      (find-class 'db-object-direct-column-slotd)
-      (call-next-method)))|#
+      (find-class 'direct-db-object-slotd)
+      (call-next-method)))
 
 
-#|(defmethod dao-slot-class-of ((object db-object) slot)
+(defmethod dao-slot-class-of ((object db-object) slot)
   "Does SLOT refer to another DB-OBJECT instance? Returns two values:
 
   * referred-dao-class
   * referring-to-other-dao-class-p"
   (let ((direct-slot (postmodern::slot-column slot)))
-    (if nil #|(typep direct-slot 'direct-db-object-slotd)|#
+    (if (typep direct-slot 'direct-db-object-slotd)
         (values (dao-class-of direct-slot) t)
-        (values nil nil))))|#
+        (values nil nil))))
 
 
-;; This handles composition of DB-CLASSes via the :DAO-CLASS slot-option.
-#|(defmethod slot-value-using-class :around ((class db-class)
-                                           object
-                                           (slotd postmodern::effective-column-slot))
+(defmethod slot-value-using-class :around ((class db-class) object (slotd postmodern::effective-column-slot))
   (let ((value (call-next-method)))
     (if (eq value :null)
         :null ;; I really don't like this about Postmodern; this should just be an unbound slot.
@@ -159,9 +140,9 @@ which holds instances of DB-OBJECT (representations of DB rows)."
                         (prog1 dao-object
                           #|(setf (slot-value-using-class class object slotd) dao-object)|#)
                         (error
-                         "Slot ~A in ~A refers to an object of class ~A with ID ~A that does not exist in the DB."
+                         "Slot ~A in ~A refers to an object of class ~A with ID ~A which does not exist in the DB."
                          slotd object referred-dao-class value))))
-              value)))))|#
+              value)))))
 
 
 
@@ -225,54 +206,3 @@ which holds instances of DB-OBJECT (representations of DB rows)."
     ;(dbg-princ (find :attname (first db-column-slots)
     ;                 :key #'car))
     ))|#
-
-
-
-
-
-
-
-
-
-#|
- (defmethod (setf slot-value-using-class) :around (new-value (class db-class) instance
-                                                            (slot-definition postmodern::effective-column-slot))
-  #|
-  (when (in-transaction-p)
-    ;; Lock the DB row or wait for a row lock if it is already locked by something else.
-    (execute (catstr "SELECT id FROM " (s-sql:to-sql-name (dao-table-name class))
-                     " WHERE (id = " (princ-to-string (id-of instance)) ")"
-                     " FOR UPDATE;")))
-  |#
-  (call-next-method))
-
-
- (defmethod slot-value-using-class :around ((class db-class) instance
-                                           (slot-definition postmodern::effective-column-slot))
-  #|
-  (when (in-transaction-p)
-    ;; Lock the DB row or wait for lock if it is already locked by someone else.
-    (execute (catstr "SELECT id FROM " (s-sql:to-sql-name (dao-table-name class))
-                     " WHERE (id = " (princ-to-string (id-of instance)) ")"
-                     " FOR UPDATE;")))
-  |#
-  (call-next-method))
-|#
-
-
-#|
-(defclass double-linked-mixin ()
-  ((left :col-type (or integer db-null) :dao-class double-linked-mixin
-         :accessor left-of)
-
-   (right :col-type (or integer db-null) :dao-class double-linked-mixin
-          :accessor right-of))
-
-  (:metaclass db-class)
-  (:documentation "
-Mixin for double-linked list structure represented in the DB backend."))
-
-
-(defmethod dao-slot-class-of ((object double-linked-mixin) slot)
-  (class-of object))
-|#
