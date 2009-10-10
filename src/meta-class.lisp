@@ -125,7 +125,7 @@ This handles composition of DB-CLASSes via the :DAO-CLASS slot-option."))
         (values nil nil))))
 
 
-(defmethod slot-value-using-class :around ((class db-class) object (slotd postmodern::effective-column-slot))
+(defmethod slot-value-using-class ((class db-class) object (slotd postmodern::effective-column-slot))
   (let ((value (call-next-method)))
     (if (eq value :null)
         :null ;; I really don't like this about Postmodern; this should just be an unbound slot.
