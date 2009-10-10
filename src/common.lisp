@@ -73,7 +73,8 @@ fast (hash-table) retrieval later."
   (sw-stm:when-commit ()
     (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
       (with-db-connection
-        (delete-dao dao))
+        (dolist (dao (mklst dao))
+          (delete-dao dao)))
       #| NOTE: I'm not doing this explicitly because it might still be interesting to get hold of an object based
       on only knowing its ID, and even though it is deleted it might still have hard links (GC) multiple places in
       the code. |#

@@ -27,6 +27,7 @@ Container represented by a DB backend table."))
         (declare (ignore not-used))
         (unless restart-p
           (push object ok-objects))))
+    ;; TODO: Just send the list directly.
     (dolist (object ok-objects)
       (put-db-object object))))
 
