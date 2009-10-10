@@ -16,6 +16,5 @@
      (:file "model-container")
      (:file "model-container-table")
      (:file "meta-class")
-     #|(:file "operation-save")|#
      #|(:file "model-container-query")|#
      ))))
