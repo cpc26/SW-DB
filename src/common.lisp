@@ -74,9 +74,9 @@ fast (hash-table) retrieval later."
     (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
       (with-db-connection
         (delete-dao dao))
-      ;; TODO: I'm not sure doing this explicitly is such a good idea because it might still be
-      ;; interesting to get hold of an object based on only knowing its ID; even though it is deleted
-      ;; it might still have hard links (GC) multiple places in the code.
+      #| NOTE: I'm not doing this explicitly because it might still be interesting to get hold of an object based
+      on only knowing its ID, and even though it is deleted it might still have hard links (GC) multiple places in
+      the code. |#
       #|(uncache-object dao)|#)))
 
 

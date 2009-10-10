@@ -12,7 +12,6 @@
 Container represented by a DB backend table."))
 
 
-
 ;; This represents SQL INSERT.
 (defmethod container-insert ((event container-insert) (container container))
   (assert (null (relative-position-of event)) nil
@@ -23,7 +22,7 @@ Container represented by a DB backend table."))
           (with-simple-restart (continue-mvc-event
                                 "Continue with MVC insert event, but skip the object that caused trouble.")
             (when (exists-in-db-p object)
-              (error "~A already exists in database. Did you mean to call SAVE instead of ADD on this object?"
+              (error "~A already exists in database. Did you mean to call SAVE instead of INSERT on this object?"
                      object)))
         (declare (ignore not-used))
         (unless restart-p
@@ -37,4 +36,4 @@ Container represented by a DB backend table."))
   (remove-db-object (objects-of event)))
 
 
-;; ..and SQL UPDATE is represented in event-save.lisp.
+;; ..and SQL UPDATE is represented by PUT-DB-OBJECT (common.lisp).
