@@ -46,24 +46,30 @@ fast (hash-table) retrieval later."
 
 
 (defun put-db-object (dao &key (cache-p t))
-  #| Touch the entire object (STM).
-  TODO: Get rid of this. Especially wrt. MVC (dataflow) this'll cause extra overhead. |#
+  #| NOTE: Not using DB transactions here since SW-STM does it for us already. By the time we get to the commit-bit,
+  any concurrency related issues have been resolved. |#
+  #| TODO: We touch all slots (STM) here. This is needed because the commit below calls UPDATE-DAO which will also
+  touch all slots. Get rid of this, as especially wrt. MVC (dataflow) it'll cause extra overhead. |#
   (dolist (slot-name (postmodern::dao-column-fields (class-of dao)))
     (when (slot-boundp dao slot-name)
       (slot-value dao slot-name)))
   (sw-stm:when-commit ()
+    #| TODO: It'd be great if we could group commits like these together and place them within the scope of a single
+    WITH-DB-CONNECTION form. Though, we might not save a _lot_ by doing this since Postmodern pools connections for
+    us. |#
     (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
-      (prog1
-          (if (exists-in-db-p dao)
-              (prog1 :update
-                (with-db-connection (update-dao dao)))
-              (prog1 :insert
-                (with-db-connection (save-dao dao))))
+      (prog1 (if (exists-in-db-p dao)
+                 (prog1 :update
+                   (with-db-connection (update-dao dao)))
+                 (prog1 :insert
+                   (with-db-connection (save-dao dao))))
         (when cache-p
           (cache-object dao))))))
 
 
 (defun remove-db-object (dao)
+  #| NOTE: Not using DB transactions here since SW-STM does it for us already. By the time we get to the commit-bit,
+  any concurrency related issues have been resolved. |#
   (sw-stm:when-commit ()
     (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
       (with-db-connection
