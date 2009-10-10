@@ -4,7 +4,6 @@
 (in-readtable sw-db)
 
 
-
 (defclass db-class (mvc-class dao-class) #|(dao-class mvc-class)|#
   ((container :reader container-of
               :type container))

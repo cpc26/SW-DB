@@ -32,7 +32,7 @@ If CACHE-P is T (default) the object will be placed in a Lisp-side cache for
 fast (hash-table) retrieval later."
   (declare (integer id)
            (symbol type))
-  (with-lock-held ((lock-of (find-class type)))
+  (with-locked-object (find-class type)
     (when cache-p
       (multiple-value-bind (dao found-p) (get-object id type)
         (when found-p
@@ -46,12 +46,13 @@ fast (hash-table) retrieval later."
 
 
 (defun put-db-object (dao &key (cache-p t))
-  ;; Touch the entire object (STM). TODO: Get rid of this.
+  #| Touch the entire object (STM).
+  TODO: Get rid of this. Especially wrt. MVC (dataflow) this'll cause extra overhead. |#
   (dolist (slot-name (postmodern::dao-column-fields (class-of dao)))
     (when (slot-boundp dao slot-name)
       (slot-value dao slot-name)))
   (sw-stm:when-commit ()
-    (with-lock-held ((lock-of (class-of dao)))
+    (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
       (prog1
           (if (exists-in-db-p dao)
               (prog1 :update
@@ -64,10 +65,9 @@ fast (hash-table) retrieval later."
 
 (defun remove-db-object (dao)
   (sw-stm:when-commit ()
-    (with-lock-held ((lock-of (class-of dao)))
+    (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
       (with-db-connection
-        (dolist (dao (mklst dao))
-          (delete-dao dao)))
+        (delete-dao dao))
       ;; TODO: I'm not sure doing this explicitly is such a good idea because it might still be
       ;; interesting to get hold of an object based on only knowing its ID; even though it is deleted
       ;; it might still have hard links (GC) multiple places in the code.
