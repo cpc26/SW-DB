@@ -127,6 +127,10 @@ This handles composition of DB-CLASSes via the :DAO-CLASS slot-option."))
 
 (defmethod slot-value-using-class ((class db-class) object (slotd postmodern::effective-column-slot))
   (let ((value (call-next-method)))
+    (when (and sw-mvc::*get-cell-p* (typep value 'cell))
+      #| We don't want the code below to mess around with the return-value at this point. In particular not if this
+      is called from (SLOT-BOUNDP-USING-CLASS MVC-CLASS T T). |#
+      (return-from slot-value-using-class value))
     (if (eq value :null)
         :null ;; I really don't like this about Postmodern; this should just be an unbound slot.
         (multiple-value-bind (referred-dao-class referring-to-other-dao-class-p)
