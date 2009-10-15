@@ -156,7 +156,10 @@ slot-option."))
       (typecase it
         (cell (sw-stm:touch it)
               (when (dao-slot-class-of instance eslotd)
-                (id-of (sw-mvc::cell-deref it))))))))
+                (with (sw-mvc::cell-deref it)
+                  (unless (eq it 'sw-mvc::%unbound)
+                    (sw-stm:touch (cell-of (id-of it)))))))))))
+
 
 
 #|(defmethod finalize-inheritance :after ((class db-class))
