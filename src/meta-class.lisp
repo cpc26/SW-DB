@@ -126,16 +126,16 @@ slot-option."))
         (values nil nil))))
 
 
-(defmethod slot-value-using-class ((class db-class) object (slotd postmodern::effective-column-slot))
+(defmethod slot-value-using-class ((class db-class) instance (slotd postmodern::effective-column-slot))
   (let ((value (call-next-method)))
     (when (and sw-mvc::*get-cell-p* (typep value 'cell))
       #| We don't want the code below to mess around with the return-value at this point. In particular not if this
       is called from (SLOT-BOUNDP-USING-CLASS MVC-CLASS T T). |#
       (return-from slot-value-using-class value))
-    (if (eq value :null)
-        :null ;; I really don't like this about Postmodern; this should just be an unbound slot.
+    (if (eq value :null) ;; I really don't like this about Postmodern; this should just be an unbound slot "already".
+        (slot-unbound class instance (slot-definition-name slotd))
         (multiple-value-bind (referred-dao-class referring-to-other-dao-class-p)
-            (dao-slot-class-of object slotd)
+            (dao-slot-class-of instance slotd)
           (if referring-to-other-dao-class-p
               (if (typep value referred-dao-class)
                   value
@@ -143,10 +143,10 @@ slot-option."))
                       (get-db-object value (class-name referred-dao-class))
                     (if found-p
                         (prog1 dao-object
-                          #|(setf (slot-value-using-class class object slotd) dao-object)|#)
+                          #|(setf (slot-value-using-class class instance slotd) dao-object)|#)
                         (error
                          "Slot ~A in ~A refers to an object of class ~A with ID ~A which does not exist in the DB."
-                         slotd object referred-dao-class value))))
+                         slotd instance referred-dao-class value))))
               value)))))
 
 
