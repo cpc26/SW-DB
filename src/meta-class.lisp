@@ -150,7 +150,13 @@ slot-option."))
               value)))))
 
 
-
+(defmethod sw-stm:touch-using-class ((instance db-object) (class db-class))
+  (dolist (eslotd (class-slots class))
+    (with (standard-instance-access instance (slot-definition-location eslotd))
+      (typecase it
+        (cell (sw-stm:touch it)
+              (when (dao-slot-class-of instance eslotd)
+                (id-of (sw-mvc::cell-deref it))))))))
 
 
 #|(defmethod finalize-inheritance :after ((class db-class))

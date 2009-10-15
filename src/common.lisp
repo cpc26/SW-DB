@@ -53,9 +53,7 @@ fast (hash-table) retrieval later."
   any concurrency related issues have been resolved. |#
   #| TODO: We touch all slots (STM) here. This is needed because the commit below calls UPDATE-DAO which will also
   touch all slots. Get rid of this, as especially wrt. MVC (dataflow) it'll cause extra overhead. |#
-  (dolist (slot-name (postmodern::dao-column-fields (class-of dao)))
-    (with (cell-of (slot-value dao slot-name))
-      (touch it)))
+  (sw-stm:touch dao)
 
   #| TODO: It'd be great if we could group commits like these together and place them within the scope of a single
   WITH-DB-CONNECTION form. Though, we might not save a _lot_ by doing this since Postmodern pools connections for
