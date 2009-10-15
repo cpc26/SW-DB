@@ -16,20 +16,8 @@ Container represented by a DB backend table."))
 (defmethod container-insert ((event container-insert) (container container))
   (assert (null (relative-position-of event)) nil
           "INSERT: Only :IN is supported.")
-  (let ((ok-objects nil))
-    (dolist (object (objects-of event))
-      (multiple-value-bind (not-used restart-p)
-          (with-simple-restart (continue-mvc-event
-                                "Continue with MVC insert event, but skip the object that caused trouble.")
-            (when (exists-in-db-p object)
-              (error "~A already exists in database. Did you mean to call SAVE instead of INSERT on this object?"
-                     object)))
-        (declare (ignore not-used))
-        (unless restart-p
-          (push object ok-objects))))
-    ;; TODO: Just send the list directly.
-    (dolist (object ok-objects)
-      (put-db-object object))))
+  (dolist (object (objects-of event))
+    (put-db-object object)))
 
 
 ;; This represents SQL DELETE.

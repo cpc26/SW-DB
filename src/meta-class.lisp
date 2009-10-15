@@ -4,7 +4,7 @@
 (in-readtable sw-db)
 
 
-(defclass db-class (mvc-class dao-class) #|(dao-class mvc-class)|#
+(defclass db-class (mvc-class dao-class)
   ((container :reader container-of
               :type container))
 
@@ -99,7 +99,8 @@ which holds instances of DB-OBJECT (representations of DB rows)."
   ((dao-class :initarg :dao-class :reader dao-class-of))
 
   (:documentation "
-This handles composition of DB-CLASSes via the :DAO-CLASS slot-option."))
+This handles convenient access when dealing with composition of DB-OBJECT instances via the :DAO-CLASS
+slot-option."))
 
 
 (defmethod initialize-instance :after ((slotd direct-db-object-slotd) &key dao-class)
