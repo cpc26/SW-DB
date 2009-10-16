@@ -5,7 +5,7 @@
 
 
 (define-variable -generate-repl-output-p-
-    :value nil)
+    :value t)
 
 
 
@@ -14,7 +14,7 @@
          :accessor name-of :initarg :name
          :initform ""))
 
-  (:metaclass db-class) ;;mvc-stm-db-class)
+  (:metaclass db-class)
   (:table-name locations))
 
 
@@ -44,10 +44,14 @@
   ())
 
 
-(defmethod handle-model-slot-set-event ((view person-view) model event slot-name)
-  (when -generate-repl-output-p-
-    (format t "PERSON-VIEW: Update View of ~A based on ~A ~A~%"
-            model event slot-name)))
+#|(defmethod (setf model-of) :around ((model db-object) (view view-base))
+  (with1 (call-next-method)
+    (dbg-prin1 it "setf model-of :around")))|#
+
+
+(defmethod (setf model-of) ((person person) (person-view person-view))
+  (dbg-prin1 person "(setf model-of)")
+  λI42)
 
 
 
@@ -55,57 +59,48 @@
   ())
 
 
-(defmethod handle-view-set-object-model ((view container-view) model)
-  (when -generate-repl-output-p-
-    (format t "CONTAINER-VIEW: initialize View of ~A based on content: ~A~%"
-            model ~model)))
+(defmethod (setf model-of) ((query query) (view container-view))
+  (dbg-prin1 query "(setf model-of)")
+  λI42)
 
 
-(defmethod handle-model-event ((view container-view) model event)
-  (when -generate-repl-output-p-
-    (format t "CONTAINER-VIEW: update View of ~A based on ~A~%"
-            model event)))
-
-
-
-#|(defun test-db-update ()
-  (let* ((query-model
-          (make-instance 'query
-                         :dependencies '(person)
-                         :dao-class 'person
-                         :query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18)))))
+(defun test-db-update ()
+  (let* ((query-model (make-instance 'query
+                                     :dependencies '(person)
+                                     :dao-class 'person
+                                     :query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18)))))
          (result-view (make-instance 'container-view :model query-model))
          (lnostdal (get-db-object 2 'person))
          (person-view (make-instance 'person-view :model lnostdal)))
     (declare (dynamic-extent result-view person-view)
              (ignorable result-view lnostdal person-view))
+    (terpri)
 
+    #|
     (when -generate-repl-output-p-
       (write-line  "## SQL UPDATE ##")
       (format t "before: ~A~%" (length ~query-model)))
     (setf (age-of lnostdal) 17)
-    (save lnostdal)
+    (put-db-object lnostdal)
     (when -generate-repl-output-p-
       (format t "after: ~A~%" (length ~query-model)))
     (setf (age-of lnostdal) 28)
-    (save lnostdal)
+    (put-db-object lnostdal)
     (when -generate-repl-output-p-
       (format t "back to start: ~A~%" (length ~query-model))
       (terpri))
+    |#
 
-    (when -generate-repl-output-p-
-      (write-line "## SQL INSERT and DELETE ##")
-      (format t "before: ~A~%" (length ~query-model)))
     (let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
-      (add person (container-of person))
-      (when -generate-repl-output-p-
-        (format t "after: ~A~%" (length ~query-model)))
-      (remove person (container-of person)))
-    (when -generate-repl-output-p-
-      (format t "back to start: ~A~%" (length ~query-model)))))|#
-
-
-
+      (write-line "## SQL INSERT and DELETE ##")
+      (format t "before: ~A~%" (length ~query-model))
+      (sw-stm:with-sync ()
+        (insert person :in (container-of person)))
+      (format t "after: ~A~%" (length ~query-model))
+      (sw-stm:with-sync ()
+        (remove person (container-of person)))
+      (format t "back to start: ~A~%" (length ~query-model)))
+    ))
 
 
 

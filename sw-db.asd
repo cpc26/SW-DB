@@ -16,5 +16,5 @@
      (:file "model-container")
      (:file "model-container-table")
      (:file "meta-class")
-     #|(:file "model-container-query")|#
+     (:file "model-container-query")
      ))))

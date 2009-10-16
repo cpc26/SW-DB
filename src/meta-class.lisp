@@ -157,7 +157,8 @@ slot-option."))
         (cell (sw-stm:touch it)
               (when (dao-slot-class-of instance eslotd)
                 (with (sw-mvc::cell-deref it)
-                  (unless (eq it 'sw-mvc::%unbound)
+                  (unless (or (eq it 'sw-mvc::%unbound)
+                              (eq it :null))
                     (sw-stm:touch (cell-of (id-of it)))))))))))
 
 

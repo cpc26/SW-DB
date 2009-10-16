@@ -4,7 +4,7 @@
 (in-readtable sw-db)
 
 
-(defclass container-db (sw-mvc:container)
+(defclass container-db (sw-mvc:container event-router)
   ()
 
   (:documentation "
