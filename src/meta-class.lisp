@@ -150,6 +150,11 @@ slot-option."))
               value)))))
 
 
+(defmethod slot-boundp-using-class ((class db-class) (instance db-object) slotd)
+  (and (call-next-method)
+       (not (eq :null (sw-mvc::cell-deref (cell-of (slot-value-using-class class instance slotd)))))))
+
+
 (defmethod sw-stm:touch-using-class :after ((instance db-object) (class db-class))
   (dolist (eslotd (class-slots class))
     (when (typep eslotd 'postmodern::effective-column-slot) ;; SW-DB type slot?
