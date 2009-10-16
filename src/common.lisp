@@ -54,7 +54,6 @@ fast (hash-table) retrieval later."
   #| TODO: We touch all slots (STM) here. This is needed because the commit below calls UPDATE-DAO which will also
   touch all slots. Get rid of this, as especially wrt. MVC (dataflow) it'll cause extra overhead. |#
   (sw-stm:touch dao)
-
   #| TODO: It'd be great if we could group commits like these together and place them within the scope of a single
   WITH-DB-CONNECTION form. Though, we might not save a _lot_ by doing this since Postmodern pools connections for
   us. |#
@@ -66,8 +65,9 @@ fast (hash-table) retrieval later."
 
 
 (defun remove-db-object (dao)
-  #| NOTE: Not using DB transactions here since SW-STM does it for us already. By the time we get to the commit-bit,
-  any concurrency related issues have been resolved. |#
+  (declare (type db-object dao))
+  ;; TODO: See the TODOs in PUT-DB-OBJECT.
+  (sw-stm:touch dao)
   (sw-stm:when-commit ()
     (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
       (with-db-connection

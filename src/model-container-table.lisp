@@ -22,7 +22,8 @@ Container represented by a DB backend table."))
 
 ;; This represents SQL DELETE.
 (defmethod container-remove ((event container-remove) (container container))
-  (remove-db-object (objects-of event)))
+  (dolist (object (objects-of event))
+    (remove-db-object object)))
 
 
 ;; ..and SQL UPDATE is represented by PUT-DB-OBJECT (common.lisp).
