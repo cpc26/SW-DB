@@ -150,17 +150,17 @@ slot-option."))
               value)))))
 
 
-(defmethod sw-stm:touch-using-class ((instance db-object) (class db-class))
+(defmethod sw-stm:touch-using-class :after ((instance db-object) (class db-class))
   (dolist (eslotd (class-slots class))
-    (with (standard-instance-access instance (slot-definition-location eslotd))
-      (typecase it
-        (cell (sw-stm:touch it)
-              (when (dao-slot-class-of instance eslotd)
-                (with (sw-mvc::cell-deref it)
-                  (unless (or (eq it 'sw-mvc::%unbound)
-                              (eq it :null))
-                    (sw-stm:touch (cell-of (id-of it)))))))))))
-
+    (when (typep eslotd 'postmodern::effective-column-slot) ;; SW-DB type slot?
+      (multiple-value-bind (referred-dao-class referring-to-other-dao-class-p) ;; Referring to DB-OBJECT instance?
+          (dao-slot-class-of instance eslotd)
+        (declare (ignore referred-dao-class))
+        (when referring-to-other-dao-class-p
+          (when (slot-boundp-using-class class instance eslotd) ;; Bound?
+            (with (slot-value-using-class class instance eslotd) ;; We have the referred to DB-OBJECT at this point.
+              (assert (subtypep (class-of it) (find-class 'db-object)))
+              (touch (cell-of (id-of it)))))))))) ;; The only thing we might touch (read, really) is the ID.
 
 
 #|(defmethod finalize-inheritance :after ((class db-class))
