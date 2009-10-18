@@ -29,11 +29,8 @@ Returns (values object :FROM-CACHE) when object was found in cache.
 Returns (values object :FROM-DB) when object had to be fetched from the database.
 If CACHE-P is T (default) the object will be placed in a Lisp-side cache for
 fast (hash-table) retrieval later."
-  (declare (symbol type))
-  (etypecase id
-    (integer)
-    (db-object (setf id (id-of id)))
-    (string (setf id (parse-integer id))))
+  (declare (integer id)
+           (symbol type))
   (with-locked-object (find-class type)
     (when cache-p
       (multiple-value-bind (dao found-p) (get-object id type)

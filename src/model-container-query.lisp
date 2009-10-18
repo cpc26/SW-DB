@@ -25,7 +25,9 @@ active query instance. These can be moved to the Lisp side once (if) I (have) im
 
    (dependencies :accessor dependencies-of
                  :type list
-                 :initform nil))
+                 :initform nil
+                 :documentation "
+When any of these change; the QUERY might need a REFRESH."))
 
   (:metaclass mvc-class)
   (:documentation "
