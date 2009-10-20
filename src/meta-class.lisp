@@ -69,7 +69,9 @@ When not NIL, this handles convenient access when dealing with composition of DB
        :reader id-of
        :documentation "
 Note that this slot stays unbound until the instance has been added to the DB by PUT-DB-OBJECT or by adding it to a
-CONTAINER instance via the container API functions of SW-MVC (e.g. INSERT)."))
+CONTAINER instance via the container API functions of SW-MVC (e.g. INSERT).")
+
+   (slot-observers :reader slot-observers-of))
 
   (:metaclass db-class)
   (:keys id)
@@ -80,6 +82,18 @@ Object representing a row in a DB backend table."))
 (defmethod cl-postgres:to-sql-string ((db-object db-object))
   ;; Postmodern refers to and "sees" all DB-OBJECT instances by their ID (slot).
   (cl-postgres:to-sql-string (id-of db-object)))
+
+
+(defmethod initialize-instance :after ((object db-object) &key)
+  ;; Monitor slots so that QUERY instances can detect changes (SQL UPDATE).
+  (let ((container (container-of object)))
+    (setf (slot-value object 'slot-observers)
+          (add-slot-observers object
+                              (lambda (instance slot-name)
+                                (when (slot-boundp instance slot-name)
+                                  (unless (eq 'id slot-name)
+                                    (slot-set instance slot-name container))))
+                              'db-class-eslotd))))
 
 
 ;; Ensure DB-OBJECT is among the parents of our new persistent class..
@@ -146,6 +160,8 @@ which holds instances of DB-OBJECT (representations of DB rows)."
 
 
 (defmethod sw-stm:touch-using-class :after ((instance db-object) (class db-class))
+  (dolist (so (slot-observers-of instance))
+    (touch so))
   (dolist (eslotd (class-slots class))
     (when (and (typep eslotd 'db-class-eslotd)
                (dao-slot-class-of instance eslotd)
