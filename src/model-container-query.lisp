@@ -6,7 +6,10 @@
 
 #| TODO:
 This thing is currently brute force big-time. What needs to be done is to setup DB-side triggers based on each
-active query instance. These can be moved to the Lisp side once (if) I (have) implement(ed) a query language here. |#
+active query instance. These can be moved to the Lisp side once (if) I (have) implement(ed) a query language here.
+
+Implementing this really boils down to creating a custom DSL that's compiled to one SQL query and one 'application query'. Think about sorting, order .. etc.
+|#
 
 
 (defclass query (dlist container-db)
@@ -14,14 +17,11 @@ active query instance. These can be moved to the Lisp side once (if) I (have) im
               :type symbol
               :initform (error ":DAO-CLASS needed."))
 
-   (query :accessor query-of
-          :type string)
+   (sql-query :accessor sql-query-of
+              :type string)
 
-   #| TODO:
-   Implementing this really boils down to creating a custom DSL that's compiled
-   to one SQL query and one 'application query'. Think about sorting, order .. etc.
-   (app-query :accessor app-query-of :initarg :app-query
-              :initform nil) |#
+   (lisp-query :accessor lisp-query-of :initarg :lisp-query
+               :initform nil)
 
    (dependencies :accessor dependencies-of
                  :type list
@@ -36,33 +36,25 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
 
 (defmethod initialize-instance :after ((model query) &key
                                        (dependencies nil dependencies-supplied-p)
-                                       (query nil query-supplied-p))
+                                       (sql-query nil sql-query-supplied-p))
   (unless dependencies-supplied-p
     (error ":DEPENDENCIES needed."))
-  (unless query-supplied-p
-    (error ":QUERY needed."))
-  (setf (slot-value model 'query) query
+  (unless sql-query-supplied-p
+    (error ":SQL-QUERY needed."))
+  (setf (slot-value model 'sql-query) sql-query
         (dependencies-of model) dependencies)
   (refresh model))
 
 
 (defmethod refresh ((model query) &optional operation)
+  (declare (ignore operation))
   (transform-into model
                   (let ((dao-class (dao-class-of model)))
-                    (with1 (loop :for id :in (with-db-connection (query (query-of model) :column))
-                              ;;:do (dbg-prin1 id)
-                              :collect (get-db-object id dao-class))
-                      #|(dbg-prin1 it)|#)))
-  (typecase operation
-    (sw-mvc:container-insert
-     (dolist (object (objects-of operation))
-       (sw-mvc::add-slot-observers object
-                                   (lambda (instance slot-name new-value)
-                                     (declare (ignore instance slot-name new-value))
-                                     (refresh model)))))))
+                    (loop :for id :in (with-db-connection (query (sql-query-of model) :column))
+                       :collect (get-db-object id dao-class)))))
 
 
-(defmethod (setf query-of) :after (query (model query))
+(defmethod (setf sql-query-of) :after (query (model query))
   (refresh model))
 
 
@@ -76,19 +68,17 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
     (dolist (dependency (set-difference new-dependencies old-dependencies))
       (with-formula query
         (when-let (event (event-of (container-of dependency)))
-          ;; TODO: Some EQ test here, as in sw/src/widgets/container.lisp, I think.
-          #|(dbg-prin1 event)|#
-          (refresh query)))
-
-      #|(add-object-callback query (container-of dependency)
-                           (lambda (operation)
-                             (cond
-                               ((in (operation :test typep)
-                                    'container-add    ;; SQL INSERT.
-                                    'container-remove ;; SQL DELETE.
-                                    'save)            ;; SQL UPDATE.
-                                (refresh query operation))
-
-                               (t
-                                (error "Don't know how to handle ~A in context of ~A."
-                                       operation query)))))|#)))
+          (typecase event
+            ;; SQL INSERT and DELETE.
+            (container-event (when (eq (container-of event) (container-of dependency))
+                               (refresh query event)))
+            ;; SQL UPDATE.
+            (slot-event
+             (when (eq (sw-mvc::context-of event) (container-of dependency))
+               ;; TODO: Need a SW-MVC:MEMBER or FIND or something function.
+               (let ((already-member (member (object-of event) ~~query :test #'eq)))
+                 (if (funcall (lisp-query-of query) (object-of event))
+                     (when (not already-member)
+                       (insert (object-of event) :in query))
+                     (when already-member
+                       (remove (object-of event) query))))))))))))

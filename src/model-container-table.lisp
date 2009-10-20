@@ -26,4 +26,4 @@ Container represented by a DB backend table."))
     (remove-db-object object)))
 
 
-;; ..and SQL UPDATE is represented by PUT-DB-OBJECT (common.lisp).
+;; ..and SQL UPDATE is represented by SLOT-EVENT (sw-mvc/event-slot.lisp).
