@@ -4,11 +4,6 @@
 (in-readtable sw-db)
 
 
-(define-variable -generate-repl-output-p-
-    :value t)
-
-
-
 (defclass location ()
   ((name :col-type string
          :accessor name-of :initarg :name
@@ -68,7 +63,8 @@
   (let* ((query-model (make-instance 'query
                                      :dependencies '(person)
                                      :dao-class 'person
-                                     :query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18)))))
+                                     :lisp-query (lambda (dao) (> (age-of dao) 18))
+                                     :sql-query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18)))))
          (result-view (make-instance 'container-view :model query-model))
          (lnostdal (get-db-object 2 'person))
          (person-view (make-instance 'person-view :model lnostdal)))
@@ -76,22 +72,19 @@
              (ignorable result-view lnostdal person-view))
     (terpri)
 
-    #|
-    (when -generate-repl-output-p-
+    (progn
       (write-line  "## SQL UPDATE ##")
-      (format t "before: ~A~%" (length ~query-model)))
-    (setf (age-of lnostdal) 17)
-    (put-db-object lnostdal)
-    (when -generate-repl-output-p-
-      (format t "after: ~A~%" (length ~query-model)))
-    (setf (age-of lnostdal) 28)
-    (put-db-object lnostdal)
-    (when -generate-repl-output-p-
-      (format t "back to start: ~A~%" (length ~query-model))
-      (terpri))
-    |#
+      (format t "## before: ~A~%" (length ~query-model))
+      (sw-stm:with-sync ()
+        (setf (age-of lnostdal) 17)
+        (put-db-object lnostdal))
+      (format t "## after: ~A~%" (length ~query-model))
+      (sw-stm:with-sync ()
+        (setf (age-of lnostdal) 28)
+        (put-db-object lnostdal))
+      (format t "## back to start: ~A~%" (length ~query-model)))
 
-    (let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
+    #|(let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
       (write-line "## SQL INSERT and DELETE ##")
       (format t "before: ~A~%" (length ~query-model))
       (sw-stm:with-sync ()
@@ -99,7 +92,7 @@
       (format t "after: ~A~%" (length ~query-model))
       (sw-stm:with-sync ()
         (remove person (container-of person)))
-      (format t "back to start: ~A~%" (length ~query-model)))
+      (format t "back to start: ~A~%" (length ~query-model)))|#
     ))
 
 
