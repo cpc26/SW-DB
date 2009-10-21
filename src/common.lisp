@@ -22,13 +22,18 @@
 
 (define-variable *database-connection-info*
     :value '("temp" "temp" "temp" "localhost" :pooled-p t)
-    :doc "SW-DB> (describe 'connect)
+    :doc "SW-DB> (describe 'postmodern:connect)
   Lambda-list: (DATABASE USER PASSWORD HOST &KEY (PORT 5432) POOLED-P (USE-SSL *DEFAULT-USE-SSL*))")
 
 
 (defmacro with-db-connection (&body body)
-  `(with-connection *database-connection-info*
-     ,@body))
+  "Ensure that we're connected to the DB. Note that this will not reconnect if we're already connected."
+  (with-gensyms (body-fn)
+    `(flet ((,body-fn () ,@body))
+       `(if postmodern:*database*
+            (funcall ,body-fn)
+            (with-connection *database-connection-info*
+              (funcall ,body-fn))))))
 
 
 (defmethod cl-postgres:to-sql-string ((pointer pointer))
