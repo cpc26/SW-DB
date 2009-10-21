@@ -11,6 +11,7 @@
     :serial t
     :components
     ((:file "package")
+     (:file "postmodern-live-patch")
      (:file "read-macros")
      (:file "common")
      (:file "model-container")
