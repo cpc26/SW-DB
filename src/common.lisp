@@ -28,12 +28,11 @@
 
 (defmacro with-db-connection (&body body)
   "Ensure that we're connected to the DB. Note that this will not reconnect if we're already connected."
-  (with-gensyms (body-fn)
-    `(flet ((,body-fn () ,@body))
-       `(if postmodern:*database*
-            (funcall ,body-fn)
-            (with-connection *database-connection-info*
-              (funcall ,body-fn))))))
+  `(flet ((body-fn () ,@body))
+     (if postmodern:*database*
+         (body-fn)
+         (with-connection *database-connection-info*
+           (body-fn)))))
 
 
 (defmethod cl-postgres:to-sql-string ((pointer pointer))
