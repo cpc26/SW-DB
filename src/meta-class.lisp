@@ -154,6 +154,11 @@ which holds instances of DB-OBJECT (representations of DB rows)."
           value))))
 
 
+(defmethod (setf slot-value-using-class) (new-value (class db-class) (instance db-object) (eslotd db-class-eslotd))
+  (prog1 (call-next-method)
+    (pushnew instance *touched-db-objects*)))
+
+
 (defmethod slot-boundp-using-class ((class db-class) (instance db-object) (eslotd db-class-eslotd))
   (and (call-next-method)
        (not (eq :null (sw-mvc::cell-deref (cell-of (slot-value-using-class class instance eslotd)))))))

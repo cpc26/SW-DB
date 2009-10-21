@@ -4,6 +4,22 @@
 (in-readtable sw-db)
 
 
+;; Our (SETF SVUC) method for DB-CLASS depends on this.
+(define-variable *touched-db-objects*)
+(sw-stm::add-dynamic-binding '*touched-db-objects* λλnil)
+(sw-stm::add-after-fn λλ(dolist (db-object *touched-db-objects*)
+                          (when (slot-boundp db-object 'id)
+                            (put-db-object db-object))))
+
+
+#|(sw-stm::add-dynamic-binding 'postmodern:*database*
+                             λλ(if postmodern:*database*
+                                   postmodern:*database*
+                                   (apply #'postmodern:connect *database-connection-info*)))|#
+;; TODO: UNWIND-PROTECT missing here!
+#|(sw-stm::add-after-fn λλ(postmodern:disconnect postmodern:*database*))|#
+
+
 (define-variable *database-connection-info*
     :value '("temp" "temp" "temp" "localhost" :pooled-p t)
     :doc "SW-DB> (describe 'connect)
@@ -65,6 +81,7 @@ fast (hash-table) retrieval later."
   (declare (type db-object dao))
   ;; TODO: See the TODOs in PUT-DB-OBJECT.
   (sw-stm:touch dao)
+  (deletef *touched-db-objects* dao)
   (sw-stm:when-commit ()
     (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.
       (with-db-connection
