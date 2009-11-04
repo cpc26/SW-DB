@@ -65,6 +65,36 @@ When not NIL, this handles convenient access when dealing with composition of DB
     (call-next-method)))
 
 
+;; Ensure DB-OBJECT is among the parents of our new persistent class..
+(defmethod initialize-instance ((class db-class) &rest initargs &key name direct-superclasses)
+  (let ((db-object-class (find-class 'db-object nil)))
+    ;; Don't want it to be a superclass of itself.
+    (if (or (eq name 'db-object)
+            (some (lambda (class) (subtypep class db-object-class))
+                  direct-superclasses))
+        (call-next-method)
+        (apply #'call-next-method class
+               :direct-superclasses (cons db-object-class direct-superclasses)
+               (remove-from-plist initargs :direct-superclasses)))))
+
+
+;; ..and ensure it stays that way when the class is re-defined or changed.
+(defmethod reinitialize-instance ((class db-class) &rest initargs &key
+                                  (direct-superclasses nil direct-superclasses-supplied-p))
+  ;; Don't want it to be a superclass of itself. :NAME is not supplied here.
+  (if (eq (class-name class) 'db-object)
+      (call-next-method)
+      (if direct-superclasses-supplied-p
+          (let ((db-object-class (find-class 'db-object nil)))
+            (if (some (lambda (class) (subtypep class db-object-class))
+                      direct-superclasses)
+                (call-next-method)
+                (apply #'call-next-method class
+                       :direct-superclasses (cons db-object-class direct-superclasses)
+                       (remove-from-plist initargs :direct-superclasses))))
+          (call-next-method))))
+
+
 
 (defclass db-object (model)
   ((id :col-type bigint
@@ -89,48 +119,6 @@ When not NIL, this handles convenient access when dealing with composition of DB
   (:keys id)
   (:documentation "
 Object representing a row in a DB backend table."))
-
-
-(defmethod initialize-instance ((class db-class) &rest initargs &key name direct-superclasses)
-  (let ((db-object-class (find-class 'db-object)))
-    (if (or (eq name 'db-object)
-            (some (lambda (class) (subtypep class db-object-class))
-                  direct-superclasses))
-        (call-next-method)
-        (apply #'call-next-method class
-               :direct-superclasses (cons db-object-class direct-superclasses)
-               (remove-from-plist initargs :direct-superclasses)))))
-
-
-;; Ensure DB-OBJECT is among the parents of our new persistent class..
-(defmethod initialize-instance ((class db-class) &rest initargs &key name direct-superclasses)
-  ;; Don't want it to be a superclass of itself.
-  (if (eq name 'db-object)
-      (call-next-method)
-      (let ((db-object-class (find-class 'db-object)))
-        (if (some (lambda (class) (subtypep class db-object-class))
-                  direct-superclasses)
-            (call-next-method)
-            (apply #'call-next-method class
-                   :direct-superclasses (cons db-object-class direct-superclasses)
-                   (remove-from-plist initargs :direct-superclasses))))))
-
-
-;; ..and ensure it stays that way when the class is re-defined or changed.
-(defmethod reinitialize-instance ((class db-class) &rest initargs &key
-                                  (direct-superclasses nil direct-superclasses-supplied-p))
-  ;; Don't want it to be a superclass of itself. :NAME is not supplied here.
-  (if (eq (class-name class) 'db-object)
-      (call-next-method)
-      (if direct-superclasses-supplied-p
-          (let ((db-object-class (find-class 'db-object)))
-            (if (some (lambda (class) (subtypep class db-object-class))
-                      direct-superclasses)
-                (call-next-method)
-                (apply #'call-next-method class
-                       :direct-superclasses (cons db-object-class direct-superclasses)
-                       (remove-from-plist initargs :direct-superclasses))))
-          (call-next-method))))
 
 
 (defmethod cl-postgres:to-sql-string ((db-object db-object))
@@ -174,18 +162,17 @@ which holds instances of DB-OBJECT (representations of DB rows)."
           (decf (slot-value it 'reference-count)))))))
 
 
-(defmethod slot-value-using-class (db-class (instance db-object) (eslotd db-class-eslotd))
+(defmethod slot-value-using-class ((class db-class) instance (eslotd db-class-eslotd))
   (if (eq 'id (slot-definition-name eslotd))
       ;; The ID slot needs special treatment.
       (read-with-lazy-init (slot-boundp instance 'id)
                            (call-next-method)
                            (setf (slot-value instance 'id)
-                                 (incf (slot-value db-class 'last-id)))
-                           (lock-of db-class))
-
+                                 (incf (slot-value (class-of instance) 'last-id)))
+                           (lock-of (class-of instance)))
       (let ((value (call-next-method)))
         (if (eq value :null)
-            (slot-unbound db-class instance (slot-definition-name eslotd))
+            (slot-unbound class instance (slot-definition-name eslotd))
             (if-let (referred-dao-class (dao-slot-class-of instance eslotd))
               #| VALUE can be an INTEGER or the actual instance. If it is an INTEGER we'll fetch the "real instance"
               from the cache or DB. |#
@@ -203,10 +190,10 @@ which holds instances of DB-OBJECT (representations of DB rows)."
               value)))))
 
 
-(defmethod (setf slot-value-using-class) (new-value db-class (instance db-object) (eslotd db-class-eslotd))
+(defmethod (setf slot-value-using-class) (new-value (class db-class) instance (eslotd db-class-eslotd))
   (when-let (referred-dao-class (dao-slot-class-of instance eslotd))
     ;; Handle REFERENCE-COUNT for possible old value/reference stored in slot.
-    (remove-reference referred-dao-class db-class instance eslotd)
+    (remove-reference referred-dao-class class instance eslotd)
     #| Handle REFERENCE-COUNT for NEW-VALUE. NEW-VALUE might be an integer when the object is de-serialized from the
     DB; the REFERENCE-COUNT will then be correct as it is. |#
     (unless (typep new-value 'integer)
@@ -216,9 +203,9 @@ which holds instances of DB-OBJECT (representations of DB rows)."
     (pushnew instance *touched-db-objects*)))
 
 
-(defmethod slot-boundp-using-class (db-class (instance db-object) (eslotd db-class-eslotd))
+(defmethod slot-boundp-using-class ((class db-class) instance (eslotd db-class-eslotd))
   (and (call-next-method)
-       (not (eq :null (sw-mvc::cell-deref (cell-of (slot-value-using-class db-class instance eslotd)))))))
+       (not (eq :null (sw-mvc::cell-deref (cell-of (slot-value-using-class class instance eslotd)))))))
 
 
 (defmethod sw-stm:touch-using-class :after ((instance db-object) (class db-class))
