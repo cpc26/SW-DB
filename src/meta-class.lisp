@@ -134,8 +134,7 @@ Object representing a row in a DB backend table."))
                               (lambda (instance slot-name)
                                 (when (slot-boundp instance slot-name)
                                   #| TODO: In general any slot directly part of DB-OBJECT is not interesting. |#
-                                  (unless (eq 'id slot-name)
-                                  ;;(unless (in (slot-name) 'id 'reference-count 'gc-p)
+                                  (unless (in (slot-name) 'id 'reference-count 'gc-p 'slot-observers)
                                     (slot-set instance slot-name container))))
                               'db-class-eslotd))))
 
