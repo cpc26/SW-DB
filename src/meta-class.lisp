@@ -6,7 +6,12 @@
 
 (defclass db-class (mvc-class dao-class)
   ((container :reader container-of
-              :type container))
+              :type container
+              :initform (make-instance 'container))
+
+   (last-id :reader last-id-of
+            :type integer
+            :initform 0))
 
   (:documentation "Metaclass combining the characteristics of MVC-CLASS (SW-MVC) and
 DAO-CLASS (Postmodern)."))
@@ -16,14 +21,8 @@ DAO-CLASS (Postmodern)."))
   t)
 
 
-(defmethod initialize-instance :after ((class db-class) &key)
-  (setf (slot-value class 'container)
-        (make-instance 'container)))
-
-
 (defmethod container-of ((class symbol))
   (container-of (find-class class)))
-
 
 
 (defclass db-class-dslotd (mvc-class-dslotd postmodern::direct-column-slot)
@@ -58,18 +57,31 @@ When not NIL, this handles convenient access when dealing with composition of DB
 
 
 (defmethod compute-effective-slot-definition ((class db-class) name dslotds)
+  #| NOTE: At the moment this doesn't check if all DSLOTD's are of the DB-CLASS-DSLOTD kind.
+  TODO: Should we perhaps emit a warning if this (not all of them being..) is the case? |#
   (if-let (dslotd (find-if (lambda (dslotd) (typep dslotd 'db-class-dslotd)) dslotds))
     (apply #'make-instance 'db-class-eslotd :direct-slot dslotd
            (sb-pcl::compute-effective-slot-definition-initargs class dslotds)) ;; TODO: closer-mop
     (call-next-method)))
 
 
+
 (defclass db-object (model)
-  ((id :col-type serial
-       :reader id-of
-       :documentation "
-Note that this slot stays unbound until the instance has been added to the DB by PUT-DB-OBJECT or by adding it to a
-CONTAINER instance via the container API functions of SW-MVC (e.g. INSERT).")
+  ((id :col-type bigint
+       :type integer
+       :reader id-of)
+
+   (reference-count :col-type bigint
+                    :type integer
+                    :reader reference-count-of
+                    :initform 0
+                    :documentation "When this is <= 0 the DB-OBJECT can be removed from the DB (\"GCed\").")
+
+   (gc-p :col-type boolean
+         :type (member t nil)
+         :reader gc-p-of
+         :initform t
+         :documentation "When this is T the DB-OBJECT can be GCed when REFERENCE-COUNT is <= 0.")
 
    (slot-observers :reader slot-observers-of))
 
@@ -77,6 +89,48 @@ CONTAINER instance via the container API functions of SW-MVC (e.g. INSERT).")
   (:keys id)
   (:documentation "
 Object representing a row in a DB backend table."))
+
+
+(defmethod initialize-instance ((class db-class) &rest initargs &key name direct-superclasses)
+  (let ((db-object-class (find-class 'db-object)))
+    (if (or (eq name 'db-object)
+            (some (lambda (class) (subtypep class db-object-class))
+                  direct-superclasses))
+        (call-next-method)
+        (apply #'call-next-method class
+               :direct-superclasses (cons db-object-class direct-superclasses)
+               (remove-from-plist initargs :direct-superclasses)))))
+
+
+;; Ensure DB-OBJECT is among the parents of our new persistent class..
+(defmethod initialize-instance ((class db-class) &rest initargs &key name direct-superclasses)
+  ;; Don't want it to be a superclass of itself.
+  (if (eq name 'db-object)
+      (call-next-method)
+      (let ((db-object-class (find-class 'db-object)))
+        (if (some (lambda (class) (subtypep class db-object-class))
+                  direct-superclasses)
+            (call-next-method)
+            (apply #'call-next-method class
+                   :direct-superclasses (cons db-object-class direct-superclasses)
+                   (remove-from-plist initargs :direct-superclasses))))))
+
+
+;; ..and ensure it stays that way when the class is re-defined or changed.
+(defmethod reinitialize-instance ((class db-class) &rest initargs &key
+                                  (direct-superclasses nil direct-superclasses-supplied-p))
+  ;; Don't want it to be a superclass of itself. :NAME is not supplied here.
+  (if (eq (class-name class) 'db-object)
+      (call-next-method)
+      (if direct-superclasses-supplied-p
+          (let ((db-object-class (find-class 'db-object)))
+            (if (some (lambda (class) (subtypep class db-object-class))
+                      direct-superclasses)
+                (call-next-method)
+                (apply #'call-next-method class
+                       :direct-superclasses (cons db-object-class direct-superclasses)
+                       (remove-from-plist initargs :direct-superclasses))))
+          (call-next-method))))
 
 
 (defmethod cl-postgres:to-sql-string ((db-object db-object))
@@ -91,38 +145,11 @@ Object representing a row in a DB backend table."))
           (add-slot-observers object
                               (lambda (instance slot-name)
                                 (when (slot-boundp instance slot-name)
+                                  #| TODO: In general any slot directly part of DB-OBJECT is not interesting. |#
                                   (unless (eq 'id slot-name)
+                                  ;;(unless (in (slot-name) 'id 'reference-count 'gc-p)
                                     (slot-set instance slot-name container))))
                               'db-class-eslotd))))
-
-
-;; Ensure DB-OBJECT is among the parents of our new persistent class..
-(defmethod initialize-instance :around ((class db-class) &rest initargs &key name direct-superclasses)
-  (if (eq name 'db-object) ;; Don't want it to be a superclass of itself.
-      (call-next-method)
-      (let ((db-object-class (find-class 'db-object)))
-        (if (some (lambda (class) (subtypep class db-object-class))
-                  direct-superclasses)
-            (call-next-method)
-            (apply #'call-next-method class
-                   :direct-superclasses (push db-object-class direct-superclasses)
-                   initargs)))))
-
-
-;; ..and ensure it stays that way when the class is re-defined or changed.
-(defmethod reinitialize-instance :around ((class db-class) &rest initargs &key
-                                          (direct-superclasses nil direct-superclasses-supplied-p))
-  (if (eq (class-name class) 'db-object) ;; Don't want it to be a superclass of itself. :NAME is not supplied here.
-      (call-next-method)
-      (if direct-superclasses-supplied-p
-          (let ((db-object-class (find-class 'db-object)))
-            (if (some (lambda (class) (subtypep class db-object-class))
-                      direct-superclasses)
-                (call-next-method)
-                (apply #'call-next-method class
-                       :direct-superclasses (push db-object-class direct-superclasses)
-                       initargs)))
-          (call-next-method))))
 
 
 (defmethod container-of ((db-object db-object))
@@ -136,32 +163,62 @@ which holds instances of DB-OBJECT (representations of DB rows)."
   (dao-class-of (postmodern::slot-column eslotd)))
 
 
-(defmethod slot-value-using-class ((class db-class) (instance db-object) (eslotd db-class-eslotd))
-  (let ((value (call-next-method)))
-    (if (eq value :null)
-        ;; TODO?: I really don't like this about Postmodern; this should just be an unbound slot "already".
-        (slot-unbound class instance (slot-definition-name eslotd))
-        (if-let (referred-dao-class (dao-slot-class-of instance eslotd))
-          (if (typep value referred-dao-class)
-              value
-              (multiple-value-bind (dao-object found-p)
-                  (get-db-object value (class-name referred-dao-class))
-                (if found-p
-                    dao-object
-                    (error
-                     "Slot ~A in ~A refers to an object of class ~A with ID ~A which does not exist in the DB."
-                     eslotd instance referred-dao-class value))))
-          value))))
+(defmethod remove-reference (referred-dao-class (class db-class) (object db-object) (eslotd db-class-eslotd))
+  (when referred-dao-class
+    (check-type referred-dao-class db-class)
+    (when (slot-boundp-using-class class object eslotd)
+      (with (slot-value-using-class class object eslotd)
+        (assert (typep it referred-dao-class))
+        (when (and (gc-p-of it)
+                   (plusp (reference-count-of it)))
+          (decf (slot-value it 'reference-count)))))))
 
 
-(defmethod (setf slot-value-using-class) (new-value (class db-class) (instance db-object) (eslotd db-class-eslotd))
+(defmethod slot-value-using-class (db-class (instance db-object) (eslotd db-class-eslotd))
+  (if (eq 'id (slot-definition-name eslotd))
+      ;; The ID slot needs special treatment.
+      (read-with-lazy-init (slot-boundp instance 'id)
+                           (call-next-method)
+                           (setf (slot-value instance 'id)
+                                 (incf (slot-value db-class 'last-id)))
+                           (lock-of db-class))
+
+      (let ((value (call-next-method)))
+        (if (eq value :null)
+            (slot-unbound db-class instance (slot-definition-name eslotd))
+            (if-let (referred-dao-class (dao-slot-class-of instance eslotd))
+              #| VALUE can be an INTEGER or the actual instance. If it is an INTEGER we'll fetch the "real instance"
+              from the cache or DB. |#
+              (if (typep value referred-dao-class)
+                  value
+                  (progn
+                    (check-type value integer)
+                    (multiple-value-bind (dao-object found-p)
+                        (get-db-object value (class-name referred-dao-class))
+                      (if found-p
+                          dao-object
+                          (error
+                           "Slot ~A in ~A refers to an object of class ~A with ID ~A which does not exist in the DB."
+                           eslotd instance referred-dao-class value)))))
+              value)))))
+
+
+(defmethod (setf slot-value-using-class) (new-value db-class (instance db-object) (eslotd db-class-eslotd))
+  (when-let (referred-dao-class (dao-slot-class-of instance eslotd))
+    ;; Handle REFERENCE-COUNT for possible old value/reference stored in slot.
+    (remove-reference referred-dao-class db-class instance eslotd)
+    #| Handle REFERENCE-COUNT for NEW-VALUE. NEW-VALUE might be an integer when the object is de-serialized from the
+    DB; the REFERENCE-COUNT will then be correct as it is. |#
+    (unless (typep new-value 'integer)
+      (assert (typep new-value referred-dao-class))
+      (incf (slot-value new-value 'reference-count))))
   (prog1 (call-next-method)
     (pushnew instance *touched-db-objects*)))
 
 
-(defmethod slot-boundp-using-class ((class db-class) (instance db-object) (eslotd db-class-eslotd))
+(defmethod slot-boundp-using-class (db-class (instance db-object) (eslotd db-class-eslotd))
   (and (call-next-method)
-       (not (eq :null (sw-mvc::cell-deref (cell-of (slot-value-using-class class instance eslotd)))))))
+       (not (eq :null (sw-mvc::cell-deref (cell-of (slot-value-using-class db-class instance eslotd)))))))
 
 
 (defmethod sw-stm:touch-using-class :after ((instance db-object) (class db-class))
@@ -174,6 +231,12 @@ which holds instances of DB-OBJECT (representations of DB rows)."
       (with (slot-value-using-class class instance eslotd)
         (check-type it db-object)
         (id-of it))))) ;; This is most likely enough (i.e., we don't call SW-STM:TOUCH).
+
+
+
+
+
+
 
 
 

@@ -17,12 +17,19 @@ Container represented by a DB backend table."))
   (assert (null (relative-position-of event)) nil
           "INSERT: Only :IN is supported.")
   (dolist (object (objects-of event))
+    (nilf (slot-value object 'gc-p))
     (put-db-object object)))
 
 
 ;; This represents SQL DELETE.
 (defmethod container-remove ((event container-remove) (container container))
   (dolist (object (objects-of event))
+    (tf (slot-value object 'gc-p))
+    (let ((class (class-of object)))
+      (dolist (eslotd (class-slots class))
+        (when (typep eslotd 'db-class-eslotd)
+          ;; TODO: This code is pretty much a copy of the code in (SETF S-V-U-C) for DB-CLASS.
+          (remove-reference (dao-slot-class-of object eslotd) class object eslotd))))
     (remove-db-object object)))
 
 

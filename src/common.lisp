@@ -4,13 +4,28 @@
 (in-readtable sw-db)
 
 
+;; TODO: No, this is no good. It should be a container type thing; it should be a request vs. a or its container.
+(defun exists-in-db-p (obj)
+  (slot-boundp obj 'id))
+
+
 ;; Our (SETF SVUC) method for DB-CLASS depends on this.
 (define-variable *touched-db-objects*)
-(sw-stm::add-dynamic-binding '*touched-db-objects* λλnil)
-(sw-stm::add-after-fn λλ(dolist (db-object *touched-db-objects*)
-                          (when (slot-boundp db-object 'id)
-                            (put-db-object db-object))))
 
+(sw-stm::add-dynamic-binding '*touched-db-objects* λλnil)
+
+#| The function name here might be a bit misleading; this is not actually executed at STM commit time; but just
+before STM commit begins. |#
+(defun commit-db-objects ()
+  (dolist (db-object (copy-seq *touched-db-objects*))
+    (if (plusp (reference-count-of db-object))
+        (put-db-object db-object)
+        (when (and (gc-p-of db-object)
+                   (exists-in-db-p db-object))
+          (remove db-object (container-of db-object))))))
+
+
+(sw-stm::add-after-fn (lambda () (commit-db-objects)))
 
 #|(sw-stm::add-dynamic-binding 'postmodern:*database*
                              λλ(if postmodern:*database*
@@ -27,20 +42,13 @@
 
 
 (defmacro with-db-connection (&body body)
-  "Ensure that we're connected to the DB. Note that this will not reconnect if we're already connected."
+  "Ensure that we're connected to the DB. Note that this will not reconnect if we're already connected. This holds
+even if *DATABASE-CONNECTION-INFO* changes."
   `(flet ((body-fn () ,@body))
      (if postmodern:*database*
          (body-fn)
          (with-connection *database-connection-info*
            (body-fn)))))
-
-
-(defmethod cl-postgres:to-sql-string ((pointer pointer))
-  (cl-postgres:to-sql-string (ptr-value pointer)))
-
-
-(defun exists-in-db-p (dao)
-  (slot-boundp dao 'id))
 
 
 (defun get-db-object (id type &key (cache-p t))
@@ -65,6 +73,7 @@ fast (hash-table) retrieval later."
 
 
 (defun put-db-object (dao &key (cache-p t))
+  "NOTE: Users are not meant to use this directly; use SW-MVC:INSERT instead."
   (declare (type db-object dao))
   #| NOTE: Not using DB transactions here since SW-STM does it for us already. By the time we get to the commit-bit,
   any concurrency related issues have been resolved. |#
@@ -82,6 +91,7 @@ fast (hash-table) retrieval later."
 
 
 (defun remove-db-object (dao)
+  "NOTE: Users are not meant to use this directly; use SW-MVC:REMOVE instead."
   (declare (type db-object dao))
   ;; TODO: See the TODOs in PUT-DB-OBJECT.
   (sw-stm:touch dao)

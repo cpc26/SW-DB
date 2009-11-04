@@ -39,14 +39,9 @@
   ())
 
 
-#|(defmethod (setf model-of) :around ((model db-object) (view view-base))
-  (with1 (call-next-method)
-    (dbg-prin1 it "setf model-of :around")))|#
-
-
 (defmethod (setf model-of) ((person person) (person-view person-view))
-  (dbg-prin1 person "(setf model-of)")
-  λI42)
+  λI(dbg-prin1 (age-of person)))
+
 
 
 
@@ -55,8 +50,10 @@
 
 
 (defmethod (setf model-of) ((query query) (view container-view))
-  (dbg-prin1 query "(setf model-of)")
-  λI42)
+  λI(when-let (event (event-of query))
+      (when (eq query (container-of event))
+        (format t "EVENT: ~A  VIEW: ~A~%" event view))))
+
 
 
 (defun test-db-update ()
@@ -65,11 +62,11 @@
                                      :dao-class 'person
                                      :lisp-query (lambda (dao) (> (age-of dao) 18))
                                      :sql-query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18)))))
-         (result-view (make-instance 'container-view :model query-model))
+         #|(result-view (make-instance 'container-view :model query-model))|#
          (lnostdal (get-db-object 2 'person))
          (person-view (make-instance 'person-view :model lnostdal)))
-    (declare (dynamic-extent result-view person-view)
-             (ignorable result-view lnostdal person-view))
+    (declare #|(dynamic-extent result-view person-view)|#
+             (ignorable #|result-view|# lnostdal person-view))
     (terpri)
 
     (progn
@@ -96,6 +93,23 @@
     ))
 
 
+(defun test-db-composition ()
+  (sw-stm:with-sync ()
+    (let* ((location (make-instance 'location :name "test"))
+           (person-1 (make-instance 'person
+                                    :first-name "first-name" :last-name "last-name"
+                                    :location location))
+           (person-2 (make-instance 'person
+                                    :first-name "first-name" :last-name "last-name"
+                                    :location location)))
+      (dbg-prin1 (reference-count-of location))
+      (insert person-1 :in (container-of person-1))
+      (insert person-2 :in (container-of person-2))
+      (remove person-1 (container-of person-1))
+      #|(remove person-2 (container-of person-2))|#
+      (dbg-prin1 (reference-count-of location))
+      )))
+
 
 (defun reset ()
   (with-db-connection
@@ -104,35 +118,27 @@
     (execute (dao-table-definition 'person))
     (execute (dao-table-definition 'location)))
 
-  (put-db-object (make-instance 'location :name "Skien")
-                 :cache-p nil)
+  #|(let ((location (make-instance 'location :name "Skien")))
+    (put-db-object location)
 
-  (put-db-object (make-instance 'person
-                                :first-name "Elin"
-                                :last-name "Nøstdal")
-                 :cache-p nil)
-  (put-db-object (make-instance 'person
-                                :location (get-db-object 1 'location)
-                                :first-name "lnostdal"
-                                :age 28
-                                :last-name "Nøstdal")
-                 :cache-p nil)
-  (put-db-object (make-instance 'person
-                                :first-name "Leif Øyvind"
-                                :last-name "Nøstdal")
-                 :cache-p nil)
-  (put-db-object (make-instance 'person
-                                :first-name "Tor"
-                                :last-name "Nøstdal")
-                 :cache-p nil)
-  (put-db-object (make-instance 'person
-                                :first-name "Lise"
-                                :last-name "Nilsen")
-                 :cache-p nil))
-
-
-
-
+    (progn
+      #|(put-db-object (make-instance 'person
+                                    :first-name "Elin"
+                                    :last-name "Nøstdal"))|#
+      #|(put-db-object (make-instance 'person
+                                    :location location
+                                    :first-name "lnostdal"
+                                    :last-name "Nøstdal"
+                                    :age 28))|#
+      #|(put-db-object (make-instance 'person
+                                    :first-name "Leif Øyvind"
+                                    :last-name "Nøstdal"))|#
+      #|(put-db-object (make-instance 'person
+                                    :first-name "Tor"
+                                    :last-name "Nøstdal"))|#
+      (put-db-object (make-instance 'person
+                                    :first-name "Lise"
+                                    :last-name "Nilsen"))))|#)
 
 
 

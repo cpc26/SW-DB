@@ -79,6 +79,7 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
                (let ((already-member (member (object-of event) ~~query :test #'eq)))
                  (if (funcall (lisp-query-of query) (object-of event))
                      (when (not already-member)
+                       ;; TODO: Ordering.
                        (insert (object-of event) :in query))
                      (when already-member
                        (remove (object-of event) query))))))))))))
