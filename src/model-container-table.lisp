@@ -28,7 +28,6 @@ Container represented by a DB backend table."))
     (let ((class (class-of object)))
       (dolist (eslotd (class-slots class))
         (when (typep eslotd 'db-class-eslotd)
-          ;; TODO: This code is pretty much a copy of the code in (SETF S-V-U-C) for DB-CLASS.
           (remove-reference (dao-slot-class-of object eslotd) class object eslotd))))
     (remove-db-object object)))
 

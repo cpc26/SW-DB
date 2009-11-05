@@ -110,7 +110,7 @@ When not NIL, this handles convenient access when dealing with composition of DB
    (gc-p :col-type boolean
          :type (member t nil)
          :reader gc-p-of
-         :initform t
+         :initform nil
          :documentation "When this is T the DB-OBJECT can be GCed when REFERENCE-COUNT is <= 0.")
 
    (slot-observers :reader slot-observers-of))
@@ -196,8 +196,13 @@ which holds instances of DB-OBJECT (representations of DB rows)."
     #| Handle REFERENCE-COUNT for NEW-VALUE. NEW-VALUE might be an integer when the object is de-serialized from the
     DB; the REFERENCE-COUNT will then be correct as it is. |#
     (unless (typep new-value 'integer)
-      (assert (typep new-value referred-dao-class))
-      (incf (slot-value new-value 'reference-count))))
+      (cond
+        ((typep new-value referred-dao-class)
+         (incf (slot-value new-value 'reference-count)))
+        ((typep new-value 'symbol)
+         (assert (eq :null new-value)))
+        (t
+         (error "This should not happen.")))))
   (prog1 (call-next-method)
     (pushnew instance *touched-db-objects*)))
 

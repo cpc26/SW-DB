@@ -77,6 +77,7 @@ fast (hash-table) retrieval later."
   (declare (type db-object dao))
   #| NOTE: Not using DB transactions here since SW-STM does it for us already. By the time we get to the commit-bit,
   any concurrency related issues have been resolved. |#
+  (id-of dao) ;; Postmodern depends on this slot being bound; it'll check using SLOT-BOUNDP.
   #| TODO: We touch all slots (STM) here. This is needed because the commit below calls UPDATE-DAO which will also
   touch all slots. Get rid of this, as especially wrt. MVC (dataflow) it'll cause extra overhead. |#
   (sw-stm:touch dao)
