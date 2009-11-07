@@ -4,7 +4,7 @@
 (in-readtable sw-db)
 
 
-(defclass container (container-db)
+(defclass table (container-db)
   ()
 
   (:metaclass mvc-class)
@@ -13,7 +13,7 @@ Container represented by a DB backend table."))
 
 
 ;; This represents SQL INSERT.
-(defmethod container-insert ((event container-insert) (container container))
+(defmethod container-insert ((event container-insert) (container table))
   (assert (null (relative-position-of event)) nil
           "INSERT: Only :IN is supported.")
   (dolist (object (objects-of event))
@@ -22,7 +22,7 @@ Container represented by a DB backend table."))
 
 
 ;; This represents SQL DELETE.
-(defmethod container-remove ((event container-remove) (container container))
+(defmethod container-remove ((event container-remove) (container table))
   (dolist (object (objects-of event))
     (tf (slot-value object 'gc-p))
     (let ((class (class-of object)))

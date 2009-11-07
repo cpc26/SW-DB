@@ -1,6 +1,5 @@
 ;;;; http://nostdal.org/ ;;;;
 
-
 (defsystem sw-db
   :depends-on (:sw-mvc
                :postmodern)

@@ -18,7 +18,8 @@
 before STM commit begins. |#
 (defun commit-db-objects ()
   (dolist (db-object (copy-seq *touched-db-objects*))
-    (if (plusp (reference-count-of db-object))
+    (if (or (plusp (reference-count-of db-object))
+            (not (gc-p-of db-object)))
         (put-db-object db-object)
         (when (and (gc-p-of db-object)
                    (exists-in-db-p db-object))

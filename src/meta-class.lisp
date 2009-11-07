@@ -7,7 +7,7 @@
 (defclass db-class (mvc-class dao-class)
   ((container :reader container-of
               :type container
-              :initform (make-instance 'container))
+              :initform (make-instance 'table))
 
    (last-id :reader last-id-of
             :type integer
@@ -161,6 +161,12 @@ which holds instances of DB-OBJECT (representations of DB rows)."
           (decf (slot-value it 'reference-count)))))))
 
 
+(defparameter *%update-dao-p* nil)
+(defmethod update-dao :around ((dao db-object))
+  (let ((*%update-dao-p* dao))
+    (call-next-method)))
+
+
 (defmethod slot-value-using-class ((class db-class) instance (eslotd db-class-eslotd))
   (if (eq 'id (slot-definition-name eslotd))
       ;; The ID slot needs special treatment.
@@ -171,7 +177,9 @@ which holds instances of DB-OBJECT (representations of DB rows)."
                            (lock-of (class-of instance)))
       (let ((value (call-next-method)))
         (if (eq value :null)
-            (slot-unbound class instance (slot-definition-name eslotd))
+            (if *%update-dao-p*
+                :null
+                (slot-unbound class instance (slot-definition-name eslotd)))
             (if-let (referred-dao-class (dao-slot-class-of instance eslotd))
               #| VALUE can be an INTEGER or the actual instance. If it is an INTEGER we'll fetch the "real instance"
               from the cache or DB. |#

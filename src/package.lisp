@@ -1,40 +1,20 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(defpackage sw-db
-  (:use #:cl
-        #:named-readtables
-        #:closer-mop
-        #:sw-mvc
-        #:postmodern
-        #:aromyxo
-        #:cl-utilities
-        #:alexandria)
-
-  (:shadowing-import-from #:alexandria
-                          #:with-gensyms
-                          #:compose
-                          #:with-unique-names
-                          #:copy-array
-                          #:once-only)
-
-  (:shadowing-import-from #:sw-mvc
-                          #:insert
-                          #:exchange
-                          #:remove)
-
-  (:shadow #:container)
+(amx:define-package :sw-db
+    :use (:amx :sw-mvc :sw-stm))
+(in-package sw-db)
 
 
-  (:export
-   #:*database-connection-info*
-   #:get-db-object
-   #:put-db-object
-   #:remove-db-object
-   #:sw-db-class
-   #:sw-db
-   #:container-model-db
-   #:with-db-connection
-   ))
+(do-external-symbols (sym (find-package :postmodern))
+  (shadowing-import sym))
 
 
-(in-package #:sw-db)
+(export
+ '(*database-connection-info*
+   with-db-connection
+   get-db-object
+   put-db-object
+   remove-db-object
+   sw-db-class
+   sw-db
+   container-model-db))
