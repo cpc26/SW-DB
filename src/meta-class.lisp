@@ -155,8 +155,7 @@ which holds instances of DB-OBJECT (representations of DB rows)."
     (when (slot-boundp-using-class class object eslotd)
       (with (slot-value-using-class class object eslotd)
         (assert (typep it referred-dao-class))
-        (when (and (gc-p-of it)
-                   (plusp (reference-count-of it)))
+        (when (plusp (reference-count-of it))
           (decf (slot-value it 'reference-count)))))))
 
 
