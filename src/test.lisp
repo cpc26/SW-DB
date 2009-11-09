@@ -44,7 +44,6 @@
 
 
 
-
 (defclass container-view (view-base)
   ())
 
@@ -57,44 +56,42 @@
 
 
 (defun test-db-update ()
-  (let* ((query-model (make-instance 'query
-                                     :dependencies '(person)
-                                     :dao-class 'person
-                                     :lisp-query (lambda (dao) (> (age-of dao) 18))
-                                     :sql-query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18)))))
-         #|(result-view (make-instance 'container-view :model query-model))|#
-         (lnostdal (get-db-object 2 'person))
-         (person-view (make-instance 'person-view :model lnostdal)))
-    (declare #|(dynamic-extent result-view person-view)|#
-             (ignorable #|result-view|# lnostdal person-view))
+  (let* ((query-model (with-sync ()
+                        (make-instance 'query
+                                       :dependencies '(person)
+                                       :dao-class 'person
+                                       :lisp-query (lambda (dao) (> (age-of dao) 18))
+                                       :sql-query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18))))))
+         (result-view (make-instance 'container-view :model query-model))
+         (lnostdal (with-sync () (get-db-object 2 'person)))
+         (person-view (with-sync () (make-instance 'person-view :model lnostdal))))
+    (declare (ignorable result-view person-view))
     (terpri)
 
     (progn
       (write-line  "## SQL UPDATE ##")
       (format t "## before: ~A~%" (length ~query-model))
-      (sw-stm:with-sync ()
-        (setf (age-of lnostdal) 17)
-        (put-db-object lnostdal))
+      (with-sync ()
+        (setf (age-of lnostdal) 17))
       (format t "## after: ~A~%" (length ~query-model))
-      (sw-stm:with-sync ()
-        (setf (age-of lnostdal) 28)
-        (put-db-object lnostdal))
+      (with-sync ()
+        (setf (age-of lnostdal) 28))
       (format t "## back to start: ~A~%" (length ~query-model)))
 
-    #|(let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
+      #|(let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
       (write-line "## SQL INSERT and DELETE ##")
       (format t "before: ~A~%" (length ~query-model))
       (sw-stm:with-sync ()
-        (insert person :in (container-of person)))
+      (insert person :in (container-of person)))
       (format t "after: ~A~%" (length ~query-model))
       (sw-stm:with-sync ()
-        (remove person (container-of person)))
+      (remove person (container-of person)))
       (format t "back to start: ~A~%" (length ~query-model)))|#
-    ))
+      ))
 
 
 (defun test-db-composition ()
-  (sw-stm:with-sync ()
+  (with-sync ()
     (let* ((location (make-instance 'location :name "test"))
            (person-1 (make-instance 'person
                                     :first-name "first-name" :last-name "last-name"
@@ -105,8 +102,8 @@
       (dbg-prin1 (reference-count-of location))
       (insert person-1 :in (container-of person-1))
       (insert person-2 :in (container-of person-2))
-      #|(remove person-1 (container-of person-1))|#
-      #|(remove person-2 (container-of person-2))|#
+      (remove person-1 (container-of person-1))
+      (remove person-2 (container-of person-2))
       (dbg-prin1 (reference-count-of location))
       )))
 
@@ -124,6 +121,7 @@
 
       (progn
         (insert (list (make-instance 'person
+                                     :location location
                                      :first-name "Elin"
                                      :last-name "Nøstdal")
                       (make-instance 'person
@@ -132,12 +130,15 @@
                                      :last-name "Nøstdal"
                                      :age 28)
                       (make-instance 'person
+                                     :location location
                                      :first-name "Leif Øyvind"
                                      :last-name "Nøstdal")
                       (make-instance 'person
+                                     :location location
                                      :first-name "Tor"
                                      :last-name "Nøstdal")
                       (make-instance 'person
+                                     :location location
                                      :first-name "Lise"
                                      :last-name "Nilsen"))
                 :in (container-of 'person))))))
