@@ -4,11 +4,6 @@
 (in-readtable sw-db)
 
 
-;; TODO: No, this is no good. It should be a container type thing; it should be a request vs. a or its container.
-(defun exists-in-db-p (obj)
-  (slot-boundp obj 'id))
-
-
 ;; Our (SETF SVUC) method for DB-CLASS depends on this.
 (define-variable *touched-db-objects*)
 
@@ -22,7 +17,7 @@ before STM commit begins. |#
             (not (gc-p-of db-object)))
         (put-db-object db-object)
         (when (and (gc-p-of db-object)
-                   (exists-in-db-p db-object))
+                   (exists-in-db-p-of db-object))
           (remove db-object (container-of db-object))))))
 
 
@@ -64,9 +59,11 @@ fast (hash-table) retrieval later."
     (when cache-p
       (multiple-value-bind (dao found-p) (get-object id type)
         (when found-p
+          (tf (slot-value dao 'exists-in-db-p))
           (return-from get-db-object (values dao :from-cache)))))
     (if-let (dao (with-db-connection (get-dao type id)))
       (progn
+        (tf (slot-value dao 'exists-in-db-p))
         (when cache-p
           (cache-object dao))
         (values dao :from-db))
@@ -79,6 +76,7 @@ fast (hash-table) retrieval later."
   #| NOTE: Not using DB transactions here since SW-STM does it for us already. By the time we get to the commit-bit,
   any concurrency related issues have been resolved. |#
   (id-of dao) ;; Postmodern depends on this slot being bound; it'll check using SLOT-BOUNDP.
+  (tf (slot-value dao 'exists-in-db-p))
   #| TODO: We touch all slots (STM) here. This is needed because the commit below calls UPDATE-DAO which will also
   touch all slots. Get rid of this, as especially wrt. MVC (dataflow) it'll cause extra overhead. |#
   (sw-stm:touch dao)
@@ -97,6 +95,7 @@ fast (hash-table) retrieval later."
   (declare (type db-object dao))
   ;; TODO: See the TODOs in PUT-DB-OBJECT.
   (sw-stm:touch dao)
+  (nilf (slot-value dao 'exists-in-db-p))
   (deletef *touched-db-objects* dao)
   (sw-stm:when-commit ()
     (with-locked-object (class-of dao) ;; vs. GET-DB-OBJECT.

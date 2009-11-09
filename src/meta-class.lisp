@@ -9,6 +9,8 @@
               :type container
               :initform (make-instance 'table))
 
+   (meta :reader meta-of)
+
    (last-id :reader last-id-of
             :type integer
             :initform 0))
@@ -97,7 +99,7 @@ When not NIL, this handles convenient access when dealing with composition of DB
 
 
 (defclass db-object (model)
-  ((id :col-type bigint
+  ((id :col-type serial
        :type integer
        :reader id-of)
 
@@ -110,8 +112,11 @@ When not NIL, this handles convenient access when dealing with composition of DB
    (gc-p :col-type boolean
          :type (member t nil)
          :reader gc-p-of
-         :initform nil
+         :initform t
          :documentation "When this is T the DB-OBJECT can be GCed when REFERENCE-COUNT is <= 0.")
+
+   (exists-in-db-p :reader exists-in-db-p-of
+                   :initform nil)
 
    (slot-observers :reader slot-observers-of))
 
