@@ -134,6 +134,7 @@ Object representing a row in a DB backend table."))
                                 (when (slot-boundp instance slot-name)
                                   #| TODO: In general any slot directly part of DB-OBJECT is not interesting. |#
                                   (unless (in (slot-name) 'id 'reference-count 'gc-p 'slot-observers)
+                                    #|(dbg-prin1 (slot-value instance slot-name))|#
                                     (slot-set instance slot-name container))))
                               'db-class-eslotd))))
 
@@ -220,8 +221,9 @@ which holds instances of DB-OBJECT (representations of DB rows)."
                (slot-boundp-using-class class instance eslotd))
       (with (slot-value-using-class class instance eslotd) ;; The referred to DAO object.
         (check-type it db-object)
-        (unless (exists-in-db-p-of it)
-          (put-db-object it))))))
+        (if (exists-in-db-p-of it)
+            (id-of it)
+            (put-db-object it))))))
 
 
 
