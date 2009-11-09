@@ -74,8 +74,9 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
                                (refresh query event)))
             ;; SQL UPDATE.
             (slot-event
-             (when (eq (sw-mvc::context-of event) (container-of dependency))
-               ;; TODO: Need a SW-MVC:MEMBER or FIND or something function.
+             (when (and (exists-in-db-p-of (object-of event))
+                        (eq (sw-mvc::context-of event) (container-of dependency)))
+               ;; TODO: Need a SW-MVC:MEMBER or FIND or something function as this can get very slow.
                (let ((already-member (member (object-of event) ~~query :test #'eq)))
                  (if (funcall (lisp-query-of query) (object-of event))
                      (when (not already-member)
