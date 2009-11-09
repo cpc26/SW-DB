@@ -7,13 +7,7 @@
 (defclass db-class (mvc-class dao-class)
   ((container :reader container-of
               :type container
-              :initform (make-instance 'table))
-
-   (meta :reader meta-of)
-
-   (last-id :reader last-id-of
-            :type integer
-            :initform 0))
+              :initform (make-instance 'table)))
 
   (:documentation "Metaclass combining the characteristics of MVC-CLASS (SW-MVC) and
 DAO-CLASS (Postmodern)."))
@@ -173,33 +167,26 @@ which holds instances of DB-OBJECT (representations of DB rows)."
 
 
 (defmethod slot-value-using-class ((class db-class) instance (eslotd db-class-eslotd))
-  (if (eq 'id (slot-definition-name eslotd))
-      ;; The ID slot needs special treatment.
-      (read-with-lazy-init (slot-boundp instance 'id)
-                           (call-next-method)
-                           (setf (slot-value instance 'id)
-                                 (incf (slot-value (class-of instance) 'last-id)))
-                           (lock-of (class-of instance)))
-      (let ((value (call-next-method)))
-        (if (eq value :null)
-            (if *%update-dao-p*
-                :null
-                (slot-unbound class instance (slot-definition-name eslotd)))
-            (if-let (referred-dao-class (dao-slot-class-of instance eslotd))
-              #| VALUE can be an INTEGER or the actual instance. If it is an INTEGER we'll fetch the "real instance"
-              from the cache or DB. |#
-              (if (typep value referred-dao-class)
-                  value
-                  (progn
-                    (check-type value integer)
-                    (multiple-value-bind (dao-object found-p)
-                        (get-db-object value (class-name referred-dao-class))
-                      (if found-p
-                          dao-object
-                          (error
-                           "Slot ~A in ~A refers to an object of class ~A with ID ~A which does not exist in the DB."
-                           eslotd instance referred-dao-class value)))))
-              value)))))
+  (let ((value (call-next-method)))
+    (if (eq value :null)
+        (if *%update-dao-p*
+            :null
+            (slot-unbound class instance (slot-definition-name eslotd)))
+        (if-let (referred-dao-class (dao-slot-class-of instance eslotd))
+          #| VALUE can be an INTEGER or the actual instance. If it is an INTEGER we'll fetch the "real instance"
+          from the cache or DB. |#
+          (if (typep value referred-dao-class)
+              value
+              (progn
+                (check-type value integer)
+                (multiple-value-bind (dao-object found-p)
+                    (get-db-object value (class-name referred-dao-class))
+                  (if found-p
+                      dao-object
+                      (error
+                       "Slot ~A in ~A refers to an object of class ~A with ID ~A which does not exist in the DB."
+                       eslotd instance referred-dao-class value)))))
+          value))))
 
 
 (defmethod (setf slot-value-using-class) (new-value (class db-class) instance (eslotd db-class-eslotd))
@@ -232,9 +219,12 @@ which holds instances of DB-OBJECT (representations of DB rows)."
     (when (and (typep eslotd 'db-class-eslotd)
                (dao-slot-class-of instance eslotd)
                (slot-boundp-using-class class instance eslotd))
-      (with (slot-value-using-class class instance eslotd)
+      (with (slot-value-using-class class instance eslotd) ;; The referred to DAO object.
         (check-type it db-object)
-        (id-of it))))) ;; This is most likely enough (i.e., we don't call SW-STM:TOUCH).
+        (unless (exists-in-db-p-of it)
+          (put-db-object it))))))
+
+
 
 
 
