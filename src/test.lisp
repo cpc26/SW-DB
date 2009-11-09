@@ -105,40 +105,42 @@
       (dbg-prin1 (reference-count-of location))
       (insert person-1 :in (container-of person-1))
       (insert person-2 :in (container-of person-2))
-      (remove person-1 (container-of person-1))
+      #|(remove person-1 (container-of person-1))|#
       #|(remove person-2 (container-of person-2))|#
       (dbg-prin1 (reference-count-of location))
       )))
 
 
 (defun reset ()
-  (with-db-connection
-    (ignore-errors (execute (:drop-table 'people)))
-    (ignore-errors (execute (:drop-table 'locations)))
-    (execute (dao-table-definition 'person))
-    (execute (dao-table-definition 'location)))
+  (with-sync ()
+    (with-db-connection
+      (ignore-errors (execute (:drop-table 'people)))
+      (ignore-errors (execute (:drop-table 'locations)))
+      (execute (dao-table-definition 'person))
+      (execute (dao-table-definition 'location)))
 
-  #|(let ((location (make-instance 'location :name "Skien")))
-    (put-db-object location)
+    (let ((location (make-instance 'location :name "Skien")))
+      (insert location :in (container-of location))
 
-    (progn
-      #|(put-db-object (make-instance 'person
-                                    :first-name "Elin"
-                                    :last-name "Nøstdal"))|#
-      #|(put-db-object (make-instance 'person
-                                    :location location
-                                    :first-name "lnostdal"
-                                    :last-name "Nøstdal"
-                                    :age 28))|#
-      #|(put-db-object (make-instance 'person
-                                    :first-name "Leif Øyvind"
-                                    :last-name "Nøstdal"))|#
-      #|(put-db-object (make-instance 'person
-                                    :first-name "Tor"
-                                    :last-name "Nøstdal"))|#
-      (put-db-object (make-instance 'person
-                                    :first-name "Lise"
-                                    :last-name "Nilsen"))))|#)
+      (progn
+        (insert (list (make-instance 'person
+                                     :first-name "Elin"
+                                     :last-name "Nøstdal")
+                      (make-instance 'person
+                                     :location location
+                                     :first-name "Lars Rune"
+                                     :last-name "Nøstdal"
+                                     :age 28)
+                      (make-instance 'person
+                                     :first-name "Leif Øyvind"
+                                     :last-name "Nøstdal")
+                      (make-instance 'person
+                                     :first-name "Tor"
+                                     :last-name "Nøstdal")
+                      (make-instance 'person
+                                     :first-name "Lise"
+                                     :last-name "Nilsen"))
+                :in (container-of 'person))))))
 
 
 
