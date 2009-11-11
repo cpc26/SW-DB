@@ -40,7 +40,7 @@
 
 
 (defmethod (setf model-of) ((person person) (person-view person-view))
-  λI(dbg-prin1 (age-of person)))
+  λV42)
 
 
 
@@ -51,61 +51,66 @@
 (defmethod (setf model-of) ((query query) (view container-view))
   λI(when-let (event (event-of query))
       (when (eq query (container-of event))
-        (format t "EVENT: ~A  VIEW: ~A~%" event view))))
+        #|(format t "EVENT: ~A  VIEW: ~A  OBJECTS: ~A~%" event view (objects-of event))|#)))
 
 
 
 (defun test-db-update ()
-  (let* ((query-model (with-sync ()
-                        (make-instance 'query
-                                       :dependencies '(person)
-                                       :dao-class 'person
-                                       :lisp-query (lambda (dao) (> (age-of dao) 18))
-                                       :sql-query (s-sql:sql (:select 'id :from 'people :where (:> 'age 18))))))
-         (result-view (make-instance 'container-view :model query-model))
-         (lnostdal (with-sync () (get-db-object 2 'person)))
-         (person-view (with-sync () (make-instance 'person-view :model lnostdal))))
-    (declare (ignorable result-view person-view))
-    (terpri)
+  (with-db-connection
+    (with-sync ()
+      (with-transaction ()
+        #|(execute "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")|#
+        (let* ((query-model (make-instance 'query
+                                           :dependencies '(person)
+                                           :dao-class 'person
+                                           :lisp-query (lambda (dao) (> (age-of dao) 18))
+                                           :sql-query (s-sql:sql (:select 'id :from 'people
+                                                                          :where (:and (:> 'age 18)
+                                                                                       (:not 'gc-p))))))
+               (result-view (make-instance 'container-view :model query-model))
+               (lnostdal (get-db-object 2 'person))
+               (person-view (make-instance 'person-view :model lnostdal)))
+          (declare (ignorable result-view person-view))
+          (terpri)
 
-    (progn
-      (write-line  "## SQL UPDATE ##")
-      (format t "## before: ~A~%" (length ~query-model))
-      (with-sync ()
-        (setf (age-of lnostdal) 17))
-      (format t "## after: ~A~%" (length ~query-model))
-      (with-sync ()
-        (setf (age-of lnostdal) 28))
-      (format t "## back to start: ~A~%" (length ~query-model)))
+          (let ((cl-postgres:*query-log* nil))
+            (dbg-prin1 (query "SELECT current_setting('transaction_isolation');"))
+            (write-line  "### SQL UPDATE ###")
+            (with-lazy-db-operations
+              (format t "# before: ~A~%~%" (length ~query-model))
+              (setf (age-of lnostdal) 17)
+              (format t "# after (lazy): ~A~%~%" (length ~query-model)))
+            (format t "# after: ~A~%~%" (length ~query-model))
+            (setf (age-of lnostdal) 29)
+            (format t "# back to start: ~A~%~%" (length ~query-model)))
 
-      #|(let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
-      (write-line "## SQL INSERT and DELETE ##")
-      (format t "before: ~A~%" (length ~query-model))
-      (sw-stm:with-sync ()
-      (insert person :in (container-of person)))
-      (format t "after: ~A~%" (length ~query-model))
-      (sw-stm:with-sync ()
-      (remove person (container-of person)))
-      (format t "back to start: ~A~%" (length ~query-model)))|#
-      ))
+          (let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
+            (write-line "### SQL INSERT and DELETE ###")
+            (format t "# before: ~A~%~%" (length ~query-model))
+            (insert person :in (container-of person))
+            (format t "# after: ~A~%~%" (length ~query-model))
+            (remove person (container-of person))
+            (format t "# back to start: ~A~%~%" (length ~query-model))))))))
 
 
 (defun test-db-composition ()
-  (with-sync ()
-    (let* ((location (make-instance 'location :name "test"))
-           (person-1 (make-instance 'person
-                                    :first-name "first-name" :last-name "last-name"
-                                    :location location))
-           (person-2 (make-instance 'person
-                                    :first-name "first-name" :last-name "last-name"
-                                    :location location)))
-      (dbg-prin1 (reference-count-of location))
-      (insert person-1 :in (container-of person-1))
-      (insert person-2 :in (container-of person-2))
-      (remove person-1 (container-of person-1))
-      (remove person-2 (container-of person-2))
-      (dbg-prin1 (reference-count-of location))
-      )))
+  (with-db-connection
+    (with-sync ()
+      (with-transaction ()
+        (let* ((location (make-instance 'location :name "test"))
+               (person-1 (make-instance 'person
+                                        :first-name "first-name" :last-name "last-name"
+                                        :location location))
+               (person-2 (make-instance 'person
+                                        :first-name "first-name" :last-name "last-name"
+                                        :location location)))
+          (dbg-prin1 (reference-count-of location))
+          (insert person-1 :in (container-of person-1))
+          (insert person-2 :in (container-of person-2))
+          (remove person-1 (container-of person-1))
+          (remove person-2 (container-of person-2))
+          (dbg-prin1 (reference-count-of location))
+          )))))
 
 
 (defun reset ()
@@ -128,7 +133,7 @@
                                      :location location
                                      :first-name "Lars Rune"
                                      :last-name "Nøstdal"
-                                     :age 28)
+                                     :age 29)
                       (make-instance 'person
                                      :location location
                                      :first-name "Leif Øyvind"

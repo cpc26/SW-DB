@@ -122,6 +122,8 @@ Object representing a row in a DB backend table."))
 
 (defmethod cl-postgres:to-sql-string ((db-object db-object))
   ;; Postmodern refers to and "sees" all DB-OBJECT instances by their ID (slot).
+  (unless (exists-in-db-p-of db-object)
+    (put-db-object db-object)) ;; After this the ID slot will be bound.
   (cl-postgres:to-sql-string (id-of db-object)))
 
 
@@ -134,7 +136,6 @@ Object representing a row in a DB backend table."))
                                 (when (slot-boundp instance slot-name)
                                   #| TODO: In general any slot directly part of DB-OBJECT is not interesting. |#
                                   (unless (in (slot-name) 'id 'reference-count 'gc-p 'slot-observers)
-                                    #|(dbg-prin1 (slot-value instance slot-name))|#
                                     (slot-set instance slot-name container))))
                               'db-class-eslotd))))
 
@@ -162,6 +163,9 @@ which holds instances of DB-OBJECT (representations of DB rows)."
 
 (defparameter *%update-dao-p* nil)
 (defmethod update-dao :around ((dao db-object))
+  (let ((*%update-dao-p* dao))
+    (call-next-method)))
+(defmethod insert-dao :around ((dao db-object))
   (let ((*%update-dao-p* dao))
     (call-next-method)))
 
@@ -204,26 +208,17 @@ which holds instances of DB-OBJECT (representations of DB rows)."
         (t
          (error "This should not happen.")))))
   (prog1 (call-next-method)
-    (pushnew instance *touched-db-objects*)))
+    (when (and (not (eq *%update-dao-p* instance))
+               (slot-boundp instance 'exists-in-db-p)
+               (exists-in-db-p-of instance))
+      ;; TODO: The dep. tracking stuff (for QUERY) will call PUT-DB-OBJECT _before_ this. :/
+      (put-db-object instance))))
 
 
 (defmethod slot-boundp-using-class ((class db-class) instance (eslotd db-class-eslotd))
   (and (call-next-method)
        (not (eq :null (sw-mvc::cell-deref (cell-of (slot-value-using-class class instance eslotd)))))))
 
-
-(defmethod sw-stm:touch-using-class :after ((instance db-object) (class db-class))
-  (dolist (so (slot-observers-of instance))
-    (touch so))
-  (dolist (eslotd (class-slots class))
-    (when (and (typep eslotd 'db-class-eslotd)
-               (dao-slot-class-of instance eslotd)
-               (slot-boundp-using-class class instance eslotd))
-      (with (slot-value-using-class class instance eslotd) ;; The referred to DAO object.
-        (check-type it db-object)
-        (if (exists-in-db-p-of it)
-            (id-of it)
-            (put-db-object it))))))
 
 
 

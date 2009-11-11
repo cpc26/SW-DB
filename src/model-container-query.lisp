@@ -46,12 +46,15 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
   (refresh model))
 
 
-(defmethod refresh ((model query) &optional operation)
-  (declare (ignore operation))
-  (transform-into model
-                  (let ((dao-class (dao-class-of model)))
-                    (loop :for id :in (with-db-connection (query (sql-query-of model) :column))
-                       :collect (get-db-object id dao-class)))))
+(defmethod refresh ((model query))
+  (if *lazy-db-operations*
+      (add-lazy-db-operation 'refresh model)
+      (transform-into model
+                      #| TODO: We only get the IDs since we might have the objects in cache already, but it might
+                      be a good idea to pass a list of IDs to GET-DB-OBJECT and let it sort things in a bulk op.. |#
+                      (let ((dao-class (dao-class-of model)))
+                        (loop :for id :in (with-db-connection (query (sql-query-of model) :column))
+                           :collect (get-db-object id dao-class))))))
 
 
 (defmethod (setf sql-query-of) :after (query (model query))
@@ -67,20 +70,26 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
         (remove-object-callback query dependency))|#)
     (dolist (dependency (set-difference new-dependencies old-dependencies))
       (with-formula query
-        (when-let (event (event-of (container-of dependency)))
+        (when-let* ((event (event-of (container-of dependency)))
+                    (object (object-of event)))
           (typecase event
             ;; SQL INSERT and DELETE.
-            (container-event (when (eq (container-of event) (container-of dependency))
-                               (refresh query event)))
+            (container-event
+             (when (eq (container-of event) (container-of dependency))
+               (typecase event
+                 (container-remove
+                  ;; TODO: SW-MVC should export this in form of a EXISTS-IN-CONTAINER-P method or similar.
+                  (when-let (node (sw-mvc::node-in-context-of query object))
+                    (touch node)
+                    (remove object query)))
+                 (t
+                  (refresh query)))))
+
             ;; SQL UPDATE.
             (slot-event
-             (when (and (exists-in-db-p-of (object-of event))
-                        (eq (sw-mvc::context-of event) (container-of dependency)))
-               ;; TODO: Need a SW-MVC:MEMBER or FIND or something function as this can get very slow.
-               (let ((already-member (member (object-of event) ~~query :test #'eq)))
-                 (if (funcall (lisp-query-of query) (object-of event))
-                     (when (not already-member)
-                       ;; TODO: Ordering.
-                       (insert (object-of event) :in query))
-                     (when already-member
-                       (remove (object-of event) query))))))))))))
+             (when (and (eq (context-of event) (container-of dependency))
+                        (not (eq *%update-dao-p* object))
+                        (exists-in-db-p-of object)
+                        (not (gc-p-of object)))
+               (put-db-object object)
+               (refresh query)))))))))
