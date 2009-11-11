@@ -27,13 +27,22 @@ even if *DATABASE-CONNECTION-INFO* changes."
 (defun handle-lazy-db-operations ()
   (let ((operations (reverse *lazy-db-operations*))
         (*lazy-db-operations* nil))
-    ;; Multiple passes. E.g., we REFRESH last.
+    ;; Update phase.
     (dolist (operation operations)
       (when operation
         (ecase (car operation)
           (refresh)
           (put-db-object (put-db-object (cdr operation)))
           (remove-db-object (remove-db-object (cdr operation))))))
+    ;; GC phase.
+    (dolist (operation operations)
+      (when operation
+        (with (cdr operation)
+          (when (and (typep it 'db-object)
+                     (gc-p-of it)
+                     (zerop (reference-count-of it)))
+            (remove-db-object it)))))
+    ;; Refresh phase.
     (dolist (operation operations)
       (when operation
         (case (car operation)
