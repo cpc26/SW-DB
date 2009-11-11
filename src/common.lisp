@@ -24,38 +24,58 @@ even if *DATABASE-CONNECTION-INFO* changes."
     :value nil)
 
 
-(defun handle-lazy-db-operations ()
-  (let ((operations (reverse *lazy-db-operations*))
-        (*lazy-db-operations* nil))
-    ;; Update phase.
-    (dolist (operation operations)
-      (when operation
-        (ecase (car operation)
-          (refresh)
-          (put-db-object (put-db-object (cdr operation)))
-          (remove-db-object (remove-db-object (cdr operation))))))
-    ;; GC phase.
-    (dolist (operation operations)
-      (when operation
-        (with (cdr operation)
-          (when (and (typep it 'db-object)
-                     (gc-p-of it)
-                     (zerop (reference-count-of it)))
-            (remove-db-object it)))))
-    ;; Refresh phase.
-    (dolist (operation operations)
-      (when operation
-        (case (car operation)
-          (refresh (refresh (cdr operation))))))))
+(flet ((remove-db-object (dao)
+         (declare (type db-object dao))
+         (with-locked-object (class-of dao)
+           (dolist (dao (mklst dao))
+             (when (exists-in-db-p-of dao)
+               (delete-dao dao)
+               (nilf (slot-value dao 'exists-in-db-p)))))))
+
+  (defun handle-lazy-db-operations ()
+    (let ((operations (nreverse *lazy-db-operations*))
+          (*lazy-db-operations* nil))
+      ;; GC phase.
+      (dolist (operation operations)
+        (when operation
+          (with (cdr operation)
+            (when (and (typep it 'db-object)
+                       (dirty-p-of it)
+                       (gc-p-of it)
+                       (zerop (reference-count-of it)))
+              (remove-db-object it)
+              (nilf (slot-value it 'dirty-p)))))) ;; Removed from all future consideration.
+
+      ;; Update phase.
+      (dolist (operation operations)
+        (when operation
+          (with (cdr operation)
+            (case (car operation)
+              (put-db-object (when (dirty-p-of it)
+                               (put-db-object it)
+                               (nilf (slot-value it 'dirty-p)))))))) ;; PUT- should only be done once.
+
+      ;; Refresh phase.
+      #| TODO: Here we can do interesting stuff wrt. precompiled SQL queries that turn out to be shared between
+      QUERY instances. |#
+      (dolist (operation operations)
+        (when operation
+          (case (car operation)
+            (refresh (refresh (cdr operation)))))))))
 
 
 (defun add-lazy-db-operation (kind obj)
-  (declare ((member refresh put-db-object remove-db-object) kind)
+  (declare ((member refresh put-db-object) kind)
            (type (or db-object query) obj))
   (assert (plusp (length *lazy-db-operations*)) nil
           "Not within scope of WITH-LAZY-DB-OPERATIONS")
-  ;; TODO: This isn't correct; needs more work etc.
-  (pushnew (cons kind obj) *lazy-db-operations* :test #'equal))
+  ;; Try to dodge the most obvious redundant operations; the rest is dodged in HANDLE-LAZY-DB-OPERATIONS.
+  (case kind
+    (refresh
+     (pushnew (cons kind obj) *lazy-db-operations*
+              :test #'equal))
+    (otherwise
+     (push (cons kind obj) *lazy-db-operations*))))
 
 
 (defmacro with-lazy-db-operations (&body body)
@@ -103,21 +123,6 @@ fast (hash-table) retrieval later."
               (tf (slot-value dao 'exists-in-db-p))))
         (when cache-p
           (cache-object dao)))))
-
-
-(defun remove-db-object (dao)
-  "NOTE: Users are not meant to use this directly; use SW-MVC:REMOVE instead."
-  (declare (type db-object dao))
-  (if *lazy-db-operations*
-      (add-lazy-db-operation 'remove-db-object dao)
-      (with-locked-object (class-of dao)
-        (dolist (dao (mklst dao))
-          (delete-dao dao)
-          (nilf (slot-value dao 'exists-in-db-p))
-          #| NOTE: I'm not doing this explicitly because it might still be interesting to get hold of an object based
-          on only knowing its ID, and even though it is deleted it might still have hard links (GC) multiple places
-          in the code. |#
-          #|(uncache-object dao)|#))))
 
 
 (defun dao-table-info (dao-class)

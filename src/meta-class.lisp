@@ -112,6 +112,9 @@ When not NIL, this handles convenient access when dealing with composition of DB
    (exists-in-db-p :reader exists-in-db-p-of
                    :initform nil)
 
+   (dirty-p :reader dirty-p-of
+            :initform nil)
+
    (slot-observers :reader slot-observers-of))
 
   (:metaclass db-class)
@@ -161,7 +164,8 @@ which holds instances of DB-OBJECT (representations of DB rows)."
           (decf (slot-value it 'reference-count)))))))
 
 
-(defparameter *%update-dao-p* nil)
+;; Our SVUC methods (below) uses this.
+(define-variable *%update-dao-p* :value nil)
 (defmethod update-dao :around ((dao db-object))
   (let ((*%update-dao-p* dao))
     (call-next-method)))
@@ -211,7 +215,7 @@ which holds instances of DB-OBJECT (representations of DB rows)."
     (when (and (not (eq *%update-dao-p* instance))
                (slot-boundp instance 'exists-in-db-p)
                (exists-in-db-p-of instance))
-      ;; TODO: The dep. tracking stuff (for QUERY) will call PUT-DB-OBJECT _before_ this. :/
+      (tf (slot-value instance 'dirty-p))
       (put-db-object instance))))
 
 

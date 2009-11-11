@@ -76,8 +76,8 @@
           (let ((cl-postgres:*query-log* nil))
             (dbg-prin1 (query "SELECT current_setting('transaction_isolation');"))
             (write-line  "### SQL UPDATE ###")
+            (format t "# before: ~A~%~%" (length ~query-model))
             (with-lazy-db-operations
-              (format t "# before: ~A~%~%" (length ~query-model))
               (setf (age-of lnostdal) 17)
               (format t "# after (lazy): ~A~%~%" (length ~query-model)))
             (format t "# after: ~A~%~%" (length ~query-model))
@@ -87,9 +87,11 @@
           (let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
             (write-line "### SQL INSERT and DELETE ###")
             (format t "# before: ~A~%~%" (length ~query-model))
-            (insert person :in (container-of person))
+            (with-lazy-db-operations
+              (insert person :in (container-of person)))
             (format t "# after: ~A~%~%" (length ~query-model))
-            (remove person (container-of person))
+            (with-lazy-db-operations
+              (remove person (container-of person)))
             (format t "# back to start: ~A~%~%" (length ~query-model))))))))
 
 
@@ -105,10 +107,12 @@
                                         :first-name "first-name" :last-name "last-name"
                                         :location location)))
           (dbg-prin1 (reference-count-of location))
-          (insert person-1 :in (container-of person-1))
-          (insert person-2 :in (container-of person-2))
-          (remove person-1 (container-of person-1))
-          (remove person-2 (container-of person-2))
+          (with-lazy-db-operations
+            (insert person-1 :in (container-of person-1))
+            (insert person-2 :in (container-of person-2)))
+          (with-lazy-db-operations
+            (remove person-1 (container-of person-1))
+            (remove person-2 (container-of person-2)))
           (dbg-prin1 (reference-count-of location))
           )))))
 
