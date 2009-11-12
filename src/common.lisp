@@ -10,18 +10,38 @@
   Lambda-list: (DATABASE USER PASSWORD HOST &KEY (PORT 5432) POOLED-P (USE-SSL *DEFAULT-USE-SSL*))")
 
 
+(define-variable *lazy-db-operations*
+    :value nil)
+
+
+(defmacro with-lazy-db-operations (&body body)
+  `(flet ((with-lazy-db-operations-body () ,@body))
+     (if postmodern:*database*
+         (let ((*lazy-db-operations* (prog1 (list nil)
+                                       ;; TODO: Think about nesting here.
+                                       (assert (not *lazy-db-operations*)))))
+           (unwind-protect
+                (with-lazy-db-operations-body)
+             (handle-lazy-db-operations)))
+         (with-lazy-db-operations-body))))
+
+
 (defmacro with-db-connection (&body body)
   "Ensure that we're connected to the DB. Note that this will not reconnect if we're already connected. This holds
 even if *DATABASE-CONNECTION-INFO* changes."
-  `(flet ((body-fn () ,@body))
-     (if postmodern:*database*
-         (body-fn)
+  `(flet ((with-db-connection-body () ,@body))
+     (if (or postmodern:*database* (not *database-connection-info*))
+         (with-db-connection-body)
          (with-connection *database-connection-info*
-           (body-fn)))))
+           (with-db-connection-body)))))
 
 
-(define-variable *lazy-db-operations*
-    :value nil)
+(defmacro with-db-transaction (&body body)
+  `(flet ((with-db-transaction-body () ,@body))
+     (if postmodern:*database*
+         (with-transaction ()
+           (with-db-transaction-body))
+         (with-db-transaction-body))))
 
 
 (flet ((remove-db-object (dao)
@@ -51,12 +71,13 @@ even if *DATABASE-CONNECTION-INFO* changes."
         (when operation
           (with (cdr operation)
             (case (car operation)
-              (put-db-object (when (dirty-p-of it)
-                               (put-db-object it)
-                               (nilf (slot-value it 'dirty-p)))))))) ;; PUT- should only be done once.
+              (put-db-object
+               (when (dirty-p-of it)
+                 (put-db-object it)
+                 (nilf (slot-value it 'dirty-p)))))))) ;; PUT- should only be done once.
 
       ;; Refresh phase.
-      #| TODO: Here we can do interesting stuff wrt. precompiled SQL queries that turn out to be shared between
+      #| TODO: Here we can do interesting stuff wrt. (prepared?) SQL queries that turn out to be shared between
       QUERY instances. |#
       (dolist (operation operations)
         (when operation
@@ -69,22 +90,13 @@ even if *DATABASE-CONNECTION-INFO* changes."
            (type (or db-object query) obj))
   (assert (plusp (length *lazy-db-operations*)) nil
           "Not within scope of WITH-LAZY-DB-OPERATIONS")
-  ;; Try to dodge the most obvious redundant operations; the rest is dodged in HANDLE-LAZY-DB-OPERATIONS.
   (case kind
     (refresh
+     ;; Try to dodge the most obvious redundant operations; the rest is dodged in HANDLE-LAZY-DB-OPERATIONS.
      (pushnew (cons kind obj) *lazy-db-operations*
               :test #'equal))
     (otherwise
      (push (cons kind obj) *lazy-db-operations*))))
-
-
-(defmacro with-lazy-db-operations (&body body)
-  `(let ((*lazy-db-operations* (prog1 (list nil)
-                                 ;; TODO: Think about nesting here.
-                                 (assert (not *lazy-db-operations*)))))
-     (unwind-protect
-          (progn ,@body)
-       (handle-lazy-db-operations))))
 
 
 (defun get-db-object (id type &key (cache-p t))
@@ -146,4 +158,3 @@ table currently representing DAO-CLASS."
                           (mapcar (lambda (octet)
                                     (format nil "~2,'0X" octet))
                                   (coerce (md5:md5sum-sequence str) 'list)))))
-(export 'pg-md5sum)

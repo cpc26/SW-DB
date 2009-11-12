@@ -58,7 +58,7 @@
 (defun test-db-update ()
   (with-db-connection
     (with-sync ()
-      (with-transaction ()
+      (with-db-transaction ()
         #|(execute "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")|#
         (let* ((query-model (make-instance 'query
                                            :dependencies '(person)
@@ -98,7 +98,7 @@
 (defun test-db-composition ()
   (with-db-connection
     (with-sync ()
-      (with-transaction ()
+      (with-db-transaction ()
         (let* ((location (make-instance 'location :name "test"))
                (person-1 (make-instance 'person
                                         :first-name "first-name" :last-name "last-name"
