@@ -120,21 +120,20 @@ Returns (values object :FROM-DB) when object had to be fetched from the database
         (values nil nil)))))
 
 
-#| NOTE: Any changes done by this will not be seen by other _DB_ transactions. |#
+#| NOTE: Any changes done by this will not be seen by other _DB_ transactions (or threads). |#
 (defun put-db-object (dao)
   "NOTE: Users are not meant to use this directly; use SW-MVC:INSERT instead."
   (declare (type db-object dao))
-  (if *lazy-db-operations*
-      (add-lazy-db-operation 'put-db-object dao)
-      (progn
+  (let ((class (class-of dao)))
+    (with-locked-object class
+      (cache-object dao))
+    (if *lazy-db-operations*
+        (add-lazy-db-operation 'put-db-object dao)
         (if (exists-in-db-p-of dao)
             (update-dao dao)
             (progn
               (tf (slot-value dao 'exists-in-db-p))
-              (insert-dao dao)))
-        (when-commit ()
-          (with-locked-object (class-of dao)
-            (cache-object dao))))))
+              (insert-dao dao))))))
 
 
 (defun dao-table-info (dao-class)
