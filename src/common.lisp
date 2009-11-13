@@ -40,6 +40,7 @@ even if *DATABASE-CONNECTION-INFO* changes."
   `(flet ((with-db-transaction-body () ,@body))
      (if postmodern:*database*
          (with-transaction ()
+           (execute "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
            (with-db-transaction-body))
          (with-db-transaction-body))))
 
@@ -47,9 +48,9 @@ even if *DATABASE-CONNECTION-INFO* changes."
 (flet ((remove-db-object (dao)
          (declare (type db-object dao))
          (when (exists-in-db-p-of dao)
-           (delete-dao dao)
-           (nilf (slot-value dao 'exists-in-db-p))
-           (nilf (slot-value dao 'dirty-p))))) ;; Removed from all future consideration.
+           (nilf (slot-value dao 'exists-in-db-p)
+                 (slot-value dao 'dirty-p)) ;; Removed from all future consideration.
+           (delete-dao dao))))
 
 
   (defun handle-lazy-db-operations ()
@@ -113,6 +114,7 @@ Returns (values object :FROM-DB) when object had to be fetched from the database
       (if-let (dao (get-dao type id))
         (progn
           (tf (slot-value dao 'exists-in-db-p))
+          ;; Lock and re-check to dodge possible race with other concurrent GET-DB-OBJECT calls.
           (with-locked-object class
             (check-cache)
             (cache-object dao))
@@ -120,22 +122,20 @@ Returns (values object :FROM-DB) when object had to be fetched from the database
         (values nil nil)))))
 
 
-#| NOTE: Any changes done by this will not be seen by other _DB_ transactions (or threads). It will still be seen
-by stuff that goes via the cache or wrt. the SW-STM transaction. |#
 (defun put-db-object (dao)
   "NOTE: Users are not meant to use this directly; use SW-MVC:INSERT instead."
   (declare (type db-object dao))
   (let ((class (class-of dao)))
     (if *lazy-db-operations*
         (add-lazy-db-operation 'put-db-object dao)
-        (progn
-          (if (exists-in-db-p-of dao)
-              (update-dao dao)
-              (progn
-                (tf (slot-value dao 'exists-in-db-p))
-                (insert-dao dao)))
-          (with-locked-object class
-            (cache-object dao))))))
+        (if (exists-in-db-p-of dao)
+            (update-dao dao)
+            (progn
+              (tf (slot-value dao 'exists-in-db-p))
+              ;; NOTE: Non-sync update of db+cache should be safe "within reason" here.
+              (insert-dao dao)
+              (with-locked-object class
+                (cache-object dao)))))))
 
 
 (defun dao-table-info (dao-class)
