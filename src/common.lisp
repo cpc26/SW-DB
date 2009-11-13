@@ -10,6 +10,7 @@
   Lambda-list: (DATABASE USER PASSWORD HOST &KEY (PORT 5432) POOLED-P (USE-SSL *DEFAULT-USE-SSL*))")
 
 
+;; TODO: Instead of doing this on a pr. thread basis, combine operations from multiple threads.
 (define-variable *lazy-db-operations*
     :value nil)
 
@@ -51,6 +52,7 @@ even if *DATABASE-CONNECTION-INFO* changes."
              (when (exists-in-db-p-of dao)
                (delete-dao dao)
                (nilf (slot-value dao 'exists-in-db-p)))))))
+
 
   (defun handle-lazy-db-operations ()
     (let ((operations (nreverse *lazy-db-operations*))
@@ -108,16 +110,21 @@ fast (hash-table) retrieval later."
   (declare (integer id)
            (symbol type))
   (let ((class (find-class type)))
-    (when cache-p
-      (multiple-value-bind (dao found-p) (get-object id class)
-        (when found-p
-          (return-from get-db-object (values dao :from-cache)))))
-    (with-locked-object class
+    (flet ((check-cache ()
+             (when cache-p
+               (with-locked-object class
+                 (multiple-value-bind (dao found-p) (get-object id class)
+                   (when found-p
+                     (return-from get-db-object (values dao :from-cache))))))))
+      (check-cache)
       (if-let (dao (get-dao type id))
         (progn
-          (tf (slot-value dao 'exists-in-db-p))
           (when cache-p
-            (cache-object dao))
+            (with-locked-object class
+              ;; Check again since another GET-DB-OBJECT operation might have "won" vs. us.
+              (check-cache)
+              (tf (slot-value dao 'exists-in-db-p))
+              (cache-object dao)))
           (values dao :from-db))
         (values nil nil)))))
 
@@ -127,14 +134,19 @@ fast (hash-table) retrieval later."
   (declare (type db-object dao))
   (if *lazy-db-operations*
       (add-lazy-db-operation 'put-db-object dao)
-      (with-locked-object (class-of dao)
+      (let ((class (class-of dao)))
         (if (exists-in-db-p-of dao)
-            (update-dao dao)
             (progn
+              (update-dao dao)
+              (when cache-p
+                (with-locked-object class
+                  (cache-object dao))))
+            ;; I can't think of a safe way to do this without locking while doing the INSERT.
+            (with-locked-object class
+              (tf (slot-value dao 'exists-in-db-p))
               (insert-dao dao)
-              (tf (slot-value dao 'exists-in-db-p))))
-        (when cache-p
-          (cache-object dao)))))
+              (when cache-p
+                (cache-object dao)))))))
 
 
 (defun dao-table-info (dao-class)
