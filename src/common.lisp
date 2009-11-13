@@ -10,7 +10,6 @@
   Lambda-list: (DATABASE USER PASSWORD HOST &KEY (PORT 5432) POOLED-P (USE-SSL *DEFAULT-USE-SSL*))")
 
 
-;; TODO: Instead of doing this on a pr. thread basis, combine operations from multiple threads.
 (define-variable *lazy-db-operations*
     :value nil)
 
@@ -48,10 +47,10 @@ even if *DATABASE-CONNECTION-INFO* changes."
 (flet ((remove-db-object (dao)
          (declare (type db-object dao))
          (with-locked-object (class-of dao)
-           (dolist (dao (mklst dao))
-             (when (exists-in-db-p-of dao)
-               (delete-dao dao)
-               (nilf (slot-value dao 'exists-in-db-p)))))))
+           (when (exists-in-db-p-of dao)
+             (delete-dao dao)
+             (nilf (slot-value dao 'exists-in-db-p))
+             (nilf (slot-value dao 'dirty-p)))))) ;; Removed from all future consideration.
 
 
   (defun handle-lazy-db-operations ()
@@ -65,8 +64,8 @@ even if *DATABASE-CONNECTION-INFO* changes."
                        (dirty-p-of it)
                        (gc-p-of it)
                        (zerop (reference-count-of it)))
-              (remove-db-object it)
-              (nilf (slot-value it 'dirty-p)))))) ;; Removed from all future consideration.
+              (remove-db-object it)))))
+
 
       ;; Update phase.
       (dolist (operation operations)
