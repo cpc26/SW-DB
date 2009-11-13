@@ -46,11 +46,10 @@ even if *DATABASE-CONNECTION-INFO* changes."
 
 (flet ((remove-db-object (dao)
          (declare (type db-object dao))
-         (with-locked-object (class-of dao)
-           (when (exists-in-db-p-of dao)
-             (delete-dao dao)
-             (nilf (slot-value dao 'exists-in-db-p))
-             (nilf (slot-value dao 'dirty-p)))))) ;; Removed from all future consideration.
+         (when (exists-in-db-p-of dao)
+           (delete-dao dao)
+           (nilf (slot-value dao 'exists-in-db-p))
+           (nilf (slot-value dao 'dirty-p))))) ;; Removed from all future consideration.
 
 
   (defun handle-lazy-db-operations ()
@@ -65,7 +64,6 @@ even if *DATABASE-CONNECTION-INFO* changes."
                        (gc-p-of it)
                        (zerop (reference-count-of it)))
               (remove-db-object it)))))
-
 
       ;; Update phase.
       (dolist (operation operations)
@@ -100,52 +98,42 @@ even if *DATABASE-CONNECTION-INFO* changes."
      (push (cons kind obj) *lazy-db-operations*))))
 
 
-(defun get-db-object (id type &key (cache-p t))
+(defun get-db-object (id type)
   "Returns (values NIL NIL) when no object with given ID and TYPE was found.
 Returns (values object :FROM-CACHE) when object was found in cache.
-Returns (values object :FROM-DB) when object had to be fetched from the database.
-If CACHE-P is T (default) the object will be placed in a Lisp-side cache for
-fast (hash-table) retrieval later."
+Returns (values object :FROM-DB) when object had to be fetched from the database."
   (declare (integer id)
            (symbol type))
   (let ((class (find-class type)))
     (flet ((check-cache ()
-             (when cache-p
-               (with-locked-object class
-                 (multiple-value-bind (dao found-p) (get-object id class)
-                   (when found-p
-                     (return-from get-db-object (values dao :from-cache))))))))
+             (multiple-value-bind (dao found-p) (get-object id class)
+               (when found-p
+                 (return-from get-db-object (values dao :from-cache))))))
       (check-cache)
       (if-let (dao (get-dao type id))
         (progn
-          (when cache-p
-            (with-locked-object class
-              ;; Check again since another GET-DB-OBJECT operation might have "won" vs. us.
-              (check-cache)
-              (tf (slot-value dao 'exists-in-db-p))
-              (cache-object dao)))
+          (tf (slot-value dao 'exists-in-db-p))
+          (with-locked-object class
+            (check-cache)
+            (cache-object dao))
           (values dao :from-db))
         (values nil nil)))))
 
 
-(defun put-db-object (dao &key (cache-p t))
+#| NOTE: Any changes done by this will not be seen by other _DB_ transactions. |#
+(defun put-db-object (dao)
   "NOTE: Users are not meant to use this directly; use SW-MVC:INSERT instead."
   (declare (type db-object dao))
   (if *lazy-db-operations*
       (add-lazy-db-operation 'put-db-object dao)
-      (let ((class (class-of dao)))
+      (progn
         (if (exists-in-db-p-of dao)
+            (update-dao dao)
             (progn
-              (update-dao dao)
-              (when cache-p
-                (with-locked-object class
-                  (cache-object dao))))
-            ;; I can't think of a safe way to do this without locking while doing the INSERT.
-            (with-locked-object class
               (tf (slot-value dao 'exists-in-db-p))
-              (insert-dao dao)
-              (when cache-p
-                (cache-object dao)))))))
+              (insert-dao dao)))
+        (with-locked-object (class-of dao)
+          (cache-object dao)))))
 
 
 (defun dao-table-info (dao-class)
