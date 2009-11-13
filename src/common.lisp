@@ -132,8 +132,9 @@ Returns (values object :FROM-DB) when object had to be fetched from the database
             (progn
               (tf (slot-value dao 'exists-in-db-p))
               (insert-dao dao)))
-        (with-locked-object (class-of dao)
-          (cache-object dao)))))
+        (when-commit ()
+          (with-locked-object (class-of dao)
+            (cache-object dao))))))
 
 
 (defun dao-table-info (dao-class)
