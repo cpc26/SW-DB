@@ -81,7 +81,8 @@
               (setf (age-of lnostdal) 17)
               (format t "# after (lazy): ~A~%~%" (length ~query-model)))
             (format t "# after: ~A~%~%" (length ~query-model))
-            (setf (age-of lnostdal) 29)
+            (with-lazy-db-operations
+              (setf (age-of lnostdal) 29))
             (format t "# back to start: ~A~%~%" (length ~query-model)))
 
           (let ((person (make-instance 'person :first-name "bob" :last-name "uncle" :age 19)))
