@@ -8,7 +8,8 @@
 This thing is currently brute force big-time. What needs to be done is to setup DB-side triggers based on each
 active query instance. These can be moved to the Lisp side once (if) I (have) implement(ed) a query language here.
 
-Implementing this really boils down to creating a custom DSL that's compiled to one SQL query and one 'application query'. Think about sorting, order .. etc.
+Implementing this really boils down to creating a custom DSL that's compiled to one SQL query and one 'application
+query'. Think about sorting, order .. etc.
 |#
 
 
@@ -20,8 +21,8 @@ Implementing this really boils down to creating a custom DSL that's compiled to 
    (sql-query :accessor sql-query-of
               :type string)
 
-   (lisp-query :accessor lisp-query-of :initarg :lisp-query
-               :initform nil)
+   #|(lisp-query :accessor lisp-query-of :initarg :lisp-query
+               :initform nil)|#
 
    (dependencies :accessor dependencies-of
                  :type list
