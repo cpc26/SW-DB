@@ -95,7 +95,7 @@ When not NIL, this handles convenient access when dealing with composition of DB
 (defclass db-object (model)
   ((id :col-type serial
        :type integer
-       :reader id-of)
+       :reader id-of :initarg :id)
 
    (reference-count :col-type bigint
                     :type integer
