@@ -15,6 +15,6 @@
      (:file "common")
      (:file "model-container")
      (:file "model-container-table")
-     (:file "meta-class")
+     (:file "db-class")
      (:file "model-container-query")
      ))))
