@@ -9,7 +9,8 @@
 
   (:metaclass mvc-class)
   (:documentation "
-Container represented by a DB backend table."))
+Container model represented by a DB backend table. Since the table might be huge we don't actually mirror it on our
+end. To examine the actual content of the table or this container abstraction, see the QUERY class."))
 
 
 ;; This represents SQL INSERT.
@@ -17,6 +18,7 @@ Container represented by a DB backend table."))
   (assert (null (relative-position-of event)) nil
           "INSERT: Only :IN is supported.")
   (dolist (object (objects-of event))
+    (check-type object db-object)
     (nilf (slot-value object 'gc-p))
     (tf (slot-value object 'dirty-p))
     (put-db-object object)))
@@ -25,6 +27,7 @@ Container represented by a DB backend table."))
 ;; This represents SQL DELETE.
 (defmethod container-remove ((event container-remove) (container table))
   (dolist (object (objects-of event))
+    (check-type object db-object)
     (tf (slot-value object 'gc-p) ;; Code in HANDLE-LAZY-DB-OPERATIONS will do the actual delete.
         (slot-value object 'dirty-p))
     (let ((class (class-of object)))
