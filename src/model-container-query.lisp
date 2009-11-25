@@ -51,11 +51,13 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
   (if *lazy-db-operations*
       (add-lazy-db-operation 'refresh model)
       (transform-into model
-                      #| TODO: We only get the IDs since we might have the objects in cache already, but it might
-                      be a good idea to pass a list of IDs to GET-DB-OBJECT and let it sort things in a bulk op.. |#
+                      #| TODO: We only get the IDs since we might have the objects in cache already, but it might be
+                      a good idea to pass a list of IDs to GET-DB-OBJECT and let it sort things in a bulk op.. |#
                       (let ((dao-class (dao-class-of model)))
-                        (loop :for id :in (with-db-connection (query (sql-query-of model) :column))
-                           :collect (get-db-object id dao-class))))))
+                        (loop :for id :in (query (sql-query-of model) :column)
+                           :collect (get-db-object id dao-class)))
+                      :really-remove-fn (lambda (model) (typep model 'db-object))
+                      :really-exchange-fn (lambda (model) (typep model 'db-object)))))
 
 
 (defmethod (setf sql-query-of) :after (query (model query))
