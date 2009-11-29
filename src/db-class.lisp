@@ -34,8 +34,14 @@ When not NIL, this handles convenient access when dealing with composition of DB
   (when dao-class
     (setf (slot-value dslotd 'dao-class)
           (etypecase dao-class
-            (symbol (find-class dao-class))
+            (symbol (with (find-class dao-class nil)
+                      (if it
+                          it
+                          (prog1 dao-class
+                            (warn "DB-CLASS-DSLOTD: Class ~S not yet defined; unable to do an early bootstrap while defining slot ~S"
+                                  dao-class (slot-definition-name dslotd))))))
             (class dao-class)))))
+
 
 
 (defclass db-class-eslotd (mvc-class-eslotd postmodern::effective-column-slot)
@@ -151,7 +157,13 @@ which holds instances of DB-OBJECT (representations of DB rows)."
 
 (defmethod dao-slot-class-of ((object db-object) (eslotd db-class-eslotd))
   ":DAO-CLASS dslot option."
-  (dao-class-of (postmodern::slot-column eslotd)))
+  (let ((dslotd (postmodern::slot-column eslotd)))
+    (with (dao-class-of dslotd)
+      (when it
+        (etypecase it
+          (symbol (setf (slot-value dslotd 'dao-class)
+                        (find-class it)))
+          (class it))))))
 
 
 (defmethod remove-reference (referred-dao-class (class db-class) (object db-object) (eslotd db-class-eslotd))
