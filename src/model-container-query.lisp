@@ -74,26 +74,27 @@ Container model representing a SQL query, or its results, vs. a DB backend."))
         (remove-object-callback query dependency))|#)
     (dolist (dependency (set-difference new-dependencies old-dependencies))
       (with-formula query
-        (when-let* ((event (event-of (container-of dependency)))
-                    (object (object-of event)))
-          (when (typep object 'db-object)
-            (typecase event
-              ;; SQL INSERT and DELETE.
-              (container-event
-               (when (eq (container-of event) (container-of dependency))
-                 (typecase event
-                   (container-remove
-                    ;; TODO: SW-MVC should export this in form of a EXISTS-IN-CONTAINER-P method or similar.
-                    (when-let (node (sw-mvc::node-in-context-of query object))
-                      (touch node)
-                      (remove object query)))
-                   (t
-                    (refresh query)))))
+        (when-let ((event (event-of (container-of dependency))))
+          (dolist (object (objects-of event))
+            (when (typep object 'db-object)
+              (typecase event
+                ;; SQL INSERT and DELETE.
+                (container-event
+                 (when (eq (container-of event) (container-of dependency))
+                   (typecase event
+                     (container-remove
+                      ;; TODO: SW-MVC should export this in form of a EXISTS-IN-CONTAINER-P method or similar.
+                      (when-let (node (node-in-context-of query object))
+                        (touch node)
+                        (remove object query)))
 
-              ;; SQL UPDATE.
-              (slot-event
-               (when (and (eq (context-of event) (container-of dependency))
-                          (not (eq *%update-dao-p* object))
-                          (exists-in-db-p-of object)
-                          (not (gc-p-of object)))
-                 (refresh query))))))))))
+                     (container-insert
+                      (refresh query)))))
+
+                ;; SQL UPDATE.
+                (slot-event
+                 (when (and (eq (context-of event) (container-of dependency))
+                            (not (eq *%update-dao-p* object))
+                            (exists-in-db-p-of object)
+                            (not (gc-p-of object)))
+                   (refresh query)))))))))))
