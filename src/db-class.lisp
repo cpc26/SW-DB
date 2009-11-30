@@ -178,7 +178,7 @@ which holds instances of DB-OBJECT (representations of DB rows)."
           (decf (slot-value it 'reference-count)))))))
 
 
-;; Our SVUC methods (below) uses this.
+;; Our SVUC methods (below) uses this. PUT-DB-OBJECT also binds this -- perhaps it should be the only one setting up the binding?
 (define-variable *%update-dao-p* :value nil)
 (defmethod update-dao :around ((dao db-object))
   (let ((*%update-dao-p* dao))

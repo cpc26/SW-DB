@@ -9,8 +9,7 @@
 
   (:metaclass mvc-class)
   (:documentation "
-Container model represented by a DB backend table. Since the table might be huge we don't actually mirror it on our
-end. To examine the actual content of the table or this container abstraction, see the QUERY class."))
+Container model represented by a DB backend table. Since the table might be huge we don't actually mirror it on our end. To examine the actual content of the table or this container abstraction, see the QUERY class."))
 
 
 ;; This represents SQL INSERT.
