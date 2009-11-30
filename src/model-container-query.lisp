@@ -92,3 +92,19 @@ Implementing this really boils down to creating a custom DSL that's compiled to 
                             (exists-in-db-p-of object)
                             (not (gc-p-of object)))
                    (refresh query)))))))))))
+
+
+(defmethod container-insert ((event container-insert) (container query))
+  (when-let ((proxy (sw-mvc::container-proxy-of event)))
+    ;; TODO: This is quite the hack; (CONTAINER-OF EVENT) is _not_ a TABLE, but we re-route this by force based on
+    ;; the 2nd argument to the CONTAINER-INSERT method.
+    (container-insert event (container-of (object-of event)))) ;; TABLE.
+  (call-next-method)) ;; DLIST.
+
+
+(defmethod container-remove ((event container-remove) (container query))
+  (when-let ((proxy (sw-mvc::container-proxy-of event)))
+    ;; TODO: This is quite the hack; (CONTAINER-OF EVENT) is _not_ a TABLE, but we re-route this by force based on
+    ;; the 2nd argument to the CONTAINER-REMOVE method.
+    (container-remove event (container-of (object-of event)))) ;; TABLE.
+  (call-next-method)) ;; DLIST.
