@@ -27,7 +27,7 @@ Implementing this really boils down to creating a custom DSL that's compiled to 
                  :documentation "When any of these change; the QUERY might need a REFRESH."))
 
   (:metaclass mvc-class)
-  (:documentation "Container model representing a SQL query, or its results, vs. a DB backend. Generally holds DB-OBJECT instances, but may also hold other Model types (e.g. +NULL-MODEL+). One is not meant to send SW-MVC events/operations to instances of this class directly; use the TABLE class instead."))
+  (:documentation "Container model representing a SQL query or its results vs. a DB backend. Generally holds DB-OBJECT instances, but may also hold other Model types (e.g. +NULL-MODEL+). One is not meant to send SW-MVC events/operations to instances of this class directly; use the TABLE class or a container proxy instead."))
 
 
 (defmethod initialize-instance :after ((model query) &key

@@ -81,11 +81,12 @@ even if *DATABASE-CONNECTION-INFO* changes."
 
       ;; Refresh phase.
       #| TODO: Here we can do interesting stuff wrt. (prepared?) SQL queries that turn out to be shared between
-      QUERY instances. |#
+      QUERY instances, but these might already be shared in the Model -->> View sense. |#
       (dolist (operation operations)
         (when operation
           (case (car operation)
-            (refresh (refresh (cdr operation)))))))))
+            (refresh
+             (refresh (cdr operation)))))))))
 
 
 (defun add-lazy-db-operation (kind obj)
