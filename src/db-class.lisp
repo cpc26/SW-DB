@@ -147,7 +147,8 @@ Object representing a row in a DB backend table."))
                                   automate this. |#
                                   (unless (in (slot-name)
                                               'id 'reference-count 'gc-p 'exists-in-db-p 'dirty-p 'slot-observers)
-                                    (slot-set instance slot-name container))))
+                                    (without-dataflow ;; Shadowing WITH-FORMULA in ADD-SLOT-OBSERVERS.
+                                      (slot-set instance slot-name container)))))
                               'db-class-eslotd))))
 
 
