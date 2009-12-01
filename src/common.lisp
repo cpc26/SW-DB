@@ -3,6 +3,9 @@
 (in-package sw-db)
 (in-readtable sw-db)
 
+;; Our SVUC methods (db-class.lisp) uses this.
+(define-variable *%update-dao-p* :value nil)
+
 
 (define-variable *database-connection-info*
     :value '("temp" "temp" "temp" "localhost" :pooled-p t)
@@ -125,17 +128,18 @@ Returns (values object :FROM-DB) when object had to be fetched from the database
 (defun put-db-object (dao)
   "NOTE: Users are not meant to use this directly; use SW-MVC:INSERT instead."
   (declare (type db-object dao))
-  (let ((class (class-of dao)))
-    (if *lazy-db-operations*
-        (add-lazy-db-operation 'put-db-object dao)
-        (if (exists-in-db-p-of dao)
-            (update-dao dao)
-            (progn
-              (tf (slot-value dao 'exists-in-db-p))
-              ;; NOTE: Non-sync update of db+cache should be safe "within reason" here.
-              (insert-dao dao)
-              (with-locked-object class
-                (cache-object dao)))))))
+  (let ((*%update-dao-p* dao))
+    (let ((class (class-of dao)))
+      (if *lazy-db-operations*
+          (add-lazy-db-operation 'put-db-object dao)
+          (if (exists-in-db-p-of dao)
+              (update-dao dao)
+              (progn
+                (tf (slot-value dao 'exists-in-db-p))
+                ;; NOTE: Non-sync update of db+cache should be safe "within reason" here.
+                (insert-dao dao)
+                (with-locked-object class
+                  (cache-object dao))))))))
 
 
 (defun dao-table-info (dao-class)
