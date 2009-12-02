@@ -39,8 +39,8 @@
   ())
 
 
-(defmethod (setf model-of) ((person person) (person-view person-view))
-  λV42)
+(defmethod set-model nconc ((person-view person-view) (person person))
+  )
 
 
 
@@ -48,10 +48,10 @@
   ())
 
 
-(defmethod (setf model-of) ((query query) (view container-view))
-  λI(when-let (event (event-of query))
-      (when (eq query (container-of event))
-        #|(format t "EVENT: ~A  VIEW: ~A  OBJECTS: ~A~%" event view (objects-of event))|#)))
+(defmethod set-model nconc ((view container-view) (query query))
+  (list λI(when-let (event (event-of query))
+            (when (eq query (container-of event))
+              (format t "EVENT: ~A  VIEW: ~A  OBJECTS: ~A~%" event view (objects-of event))))))
 
 
 
@@ -59,11 +59,10 @@
   (with-db-connection
     (with-sync ()
       (with-db-transaction ()
-        #|(execute "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")|#
         (let* ((query-model (make-instance 'query
                                            :dependencies '(person)
                                            :dao-class 'person
-                                           :lisp-query (lambda (dao) (> (age-of dao) 18))
+                                           ;;:lisp-query (lambda (dao) (> (age-of dao) 18))
                                            :sql-query (s-sql:sql (:select 'id :from 'people
                                                                           :where (:and (:> 'age 18)
                                                                                        (:not 'gc-p))))))
@@ -74,7 +73,7 @@
           (terpri)
 
           (let ((cl-postgres:*query-log* nil))
-            (dbg-prin1 (query "SELECT current_setting('transaction_isolation');"))
+            #|(dbg-prin1 (query "SELECT current_setting('transaction_isolation');"))|#
             (write-line  "### SQL UPDATE ###")
             (format t "# before: ~A~%~%" (length ~query-model))
             (with-lazy-db-operations
@@ -93,7 +92,12 @@
             (format t "# after: ~A~%~%" (length ~query-model))
             (with-lazy-db-operations
               (remove person (container-of person)))
-            (format t "# back to start: ~A~%~%" (length ~query-model))))))))
+            (format t "# back to start: ~A~%~%" (length ~query-model)))
+
+          (dolist (model-observer (append (model-observers-of result-view)
+                                          (model-observers-of person-view)))
+            (cell-mark-as-dead model-observer)))))))
+
 
 
 (defun test-db-composition ()
@@ -116,6 +120,7 @@
             (remove person-2 (container-of person-2)))
           (dbg-prin1 (reference-count-of location))
           )))))
+
 
 
 (defun reset ()
