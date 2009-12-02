@@ -1,7 +1,7 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(in-package sw-db)
-(in-readtable sw-db)
+(in-package :sw-db)
+=common-headers=
 
 
 #| TODO:

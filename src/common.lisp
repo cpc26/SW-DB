@@ -1,7 +1,7 @@
 ;;;; http://nostdal.org/ ;;;;
 
-(in-package sw-db)
-(in-readtable sw-db)
+(in-package :sw-db)
+=common-headers=
 
 ;; Our SVUC methods (db-class.lisp) uses this.
 (define-variable *%update-dao-p* :value nil)
